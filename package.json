@@ -5,7 +5,7 @@
   "description": "T3 Code 扩展宿主与扩展市场（非官方，macOS）",
   "license": "MIT",
   "scripts": {
-    "test": "node tests/verify.cjs",
+    "test": "node tests/verify.cjs && npm test --prefix extensions/edge-glow && npm test --prefix extensions/effort-slider && npm test --prefix extensions/desk-pets",
     "registry": "node lib/build.cjs"
   },
   "engines": { "node": ">=22" }

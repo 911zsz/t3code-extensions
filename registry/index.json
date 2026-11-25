@@ -14,7 +14,7 @@
           "description": "Lights up the window edge when an approval is needed, the agent is waiting for your answer, an error occurs, or a background run finishes."
         }
       },
-      "manifest": "../extensions/edge-glow/plugin.json",
+      "manifest": "https://raw.githubusercontent.com/ZiHao256/t3x-edge-glow/9546f625caa78d7340255adeeb797908569af784/plugin.json",
       "sha256": {
         "plugin.json": "c8e2eb94fc982a2caafb518e413b42cd17e6ec68dfacc1ef90b3788100e9979c",
         "logic.js": "5aa32594f25d701ca1cea5a86e51b043d0ccd6a8d1fe7f67d8427a9482ea1760",
@@ -34,7 +34,7 @@
           "description": "Replaces the reasoning effort list in the composer with a stepped slider; higher levels make the stars brighter and faster, and the top level adds a flowing nebula."
         }
       },
-      "manifest": "../extensions/effort-slider/plugin.json",
+      "manifest": "https://raw.githubusercontent.com/ZiHao256/t3x-effort-slider/b9150fd307de8d99facf1ec6ef1e614b5ad16ef5/plugin.json",
       "sha256": {
         "plugin.json": "9e5deff46107a016757f9ad3df90f6e0bd08d87c22592ec8f845aef2d81f536c",
         "web.js": "cd1302a246f8f98ccf4fd53346fac2f24c59d9a5a366da49a07064fd7f7d4279",
@@ -53,7 +53,7 @@
           "description": "Pixel pets for the current agent stand on the composer and react to the thread state; each subagent sends its own pet to work alongside. Choose a pet per agent and edit the pet library."
         }
       },
-      "manifest": "../extensions/desk-pets/plugin.json",
+      "manifest": "https://raw.githubusercontent.com/ZiHao256/t3x-desk-pets/dc157f998dd348924157b7e689330490eb66bbf8/plugin.json",
       "sha256": {
         "plugin.json": "f08941e5fc15403ef8b72e3bda4123f3a58a7b7836f7e2b066affa37ee48c657",
         "logic.js": "0ae57337132ff1e709b58285c1cddaa8465f9fce4dde76a314551a4dca50b931",

@@ -16,7 +16,11 @@
 
 ## 安装
 
-需要：`/Applications/T3 Code (Beta).app` 是官方 0.1.11，Node.js 22 以上。
+需要：`/Applications/T3 Code (Beta).app` 是官方 0.1.11，Node.js 22 以上。三个内置扩展是 git submodule，克隆时带上 `--recursive`（已经克隆过的运行 `git submodule update --init`）：
+
+```sh
+git clone --recursive https://github.com/ZiHao256/t3code-extensions.git
+```
 
 ```sh
 node install.cjs install             # 和官方版共用 ~/.t3（会话、项目、设置），两者不能同时开
@@ -45,7 +49,7 @@ node install.cjs uninstall           # 先退出应用
   - 社区扩展：GitHub 上带 `t3code-extension` 话题的仓库，按 star 排序，默认列出前 30 个，其余靠搜索。标着“未审核”，安装时固定到某个提交。
   - 也可以填 GitHub 仓库地址、`plugin.json` 链接或第三方市场的 `index.json` 链接，或者上传 zip。
   - 安装前都会弹窗确认来源。
-- **内置**：边缘光、推理强度滑条、桌宠，各有独立仓库（[t3x-edge-glow](https://github.com/ZiHao256/t3x-edge-glow)、[t3x-effort-slider](https://github.com/ZiHao256/t3x-effort-slider)、[t3x-desk-pets](https://github.com/ZiHao256/t3x-desk-pets)）。点刷新从仓库的最新 Release 检查更新，装上的新版覆盖内置版本；“恢复内置版本”换回来，开关、设置和数据都保留。
+- **内置**：边缘光、推理强度滑条、桌宠，各是一个独立仓库（源码在那里，本仓库用 submodule 引用，[t3x-edge-glow](https://github.com/ZiHao256/t3x-edge-glow)、[t3x-effort-slider](https://github.com/ZiHao256/t3x-effort-slider)、[t3x-desk-pets](https://github.com/ZiHao256/t3x-desk-pets)）。它们只通过 `host` 接口和宿主交互。点刷新从仓库的最新 Release 检查更新，装上的新版覆盖内置版本；“恢复内置版本”换回来，开关、设置和数据都保留。
 - **加载本地插件**：选一个扩展文件夹，之后改了代码点卡片上的刷新就重新读取（开发用；不支持记住文件夹的环境退回一次性导入）。
 - **刷新**：依次检查所有能更新的扩展，并刷新社区列表。打开页面时不自动检查：不登录 GitHub 时，每个出口 IP 每小时只能调 60 次接口（检查一次约 3 次），搜索每分钟约 10 次；共用的代理出口常被别人用光，这时会提示多久后恢复。
 
@@ -139,13 +143,13 @@ my-ext/
   "apiVersion": 1,
   "extensions": [
     { "id": "…", "name": "…", "version": "…", "description": "…", "author": "…",
-      "manifest": "../extensions/…/plugin.json",
+      "manifest": "../examples/…/plugin.json",
       "sha256": { "plugin.json": "…", "web.js": "…" } }
   ]
 }
 ```
 
-`manifest` 相对 index.json 解析；安装时每个文件都必须有 `sha256` 且一致，否则拒绝。改了扩展后运行 `node lib/build.cjs` 重新生成。托管的地方要允许跨域（GitHub raw 默认允许）。
+`manifest` 相对 index.json 解析，也可以是完整地址（本仓库的内置扩展指向各自仓库固定提交的 raw 地址）；安装时每个文件都必须有 `sha256` 且一致，否则拒绝。改了扩展后运行 `node lib/build.cjs` 重新生成。托管的地方要允许跨域（GitHub raw 默认允许）。
 
 SHA-256 只保证下载到的就是注册表写的那份，**不代表代码安全**：扩展以完整权限运行在 T3 里，能读你的对话、调用本机 T3 服务。只装你信任的。
 
@@ -175,12 +179,18 @@ SHA-256 只保证下载到的就是注册表写的那份，**不代表代码安�
 ## 开发
 
 ```sh
-npm test               # 纯函数、扩展在宿主包装里编译激活、补丁打到官方 0.1.11、asar 读回、注册表哈希
+npm test               # 宿主：纯函数、扩展在宿主包装里编译激活、补丁打到官方 0.1.11、asar 读回、注册表哈希；再跑三个扩展各自的测试
 node lib/build.cjs     # 重新生成 registry/index.json
-node lib/split.cjs ../t3x-repos   # 把三个内置扩展写到各自的仓库目录（只写清单声明的文件和 README、LICENSE）
 ```
 
-发内置扩展的新版本：改 `extensions/<id>/plugin.json` 的 `version` → `node lib/split.cjs` → 在对应仓库提交、打 `v<version>` 标签并发 Release。
+仓库分工：本仓库是宿主（补丁、`host` 接口、设置页、市场）和示例扩展；`extensions/<id>` 是三个内置扩展的 submodule，源码、测试和发版都在各自的仓库里，安装时打包进宿主作为内置扩展。
+
+改内置扩展：
+1. 在 `extensions/<id>` 里改代码、改 `plugin.json` 的 `version`、跑 `npm test`，在扩展仓库提交；
+2. 在这个提交上打 `v<version>` 标签，连标签一起推送并发 Release（“检查更新”看的是最新 Release）；
+3. 回到本仓库：`git add extensions/<id>` → `node lib/build.cjs`（注册表指向新提交）→ `npm test`，submodule 指向和 `registry/index.json` 一起提交。
+
+改宿主接口：先在本仓库加接口、提高 `host/pure.js` 的 `API_VERSION` 并发布，再让用到新接口的扩展把 `apiVersion` 改成新值。
 
 ## 许可
 
