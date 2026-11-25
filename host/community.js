@@ -123,9 +123,9 @@ function CommunityCard({ ui, item, busy, installing, onInstall }) {
           { className: "t3x-card-title-row" },
           h("h3", { className: "t3x-card-name", title: item.repo }, item.repo),
           h(
-            "span",
+            ui.Badge,
             {
-              className: "t3x-badge",
+              variant: "outline",
               title: L("GitHub 上的社区扩展，安装时固定到当前提交", "A community extension from GitHub, pinned to the current commit when installed"),
             },
             L("社区", "Community"),
@@ -173,7 +173,7 @@ function CommunityCard({ ui, item, busy, installing, onInstall }) {
         "div",
         { className: "t3x-card-foot-right" },
         installed
-          ? h("span", { className: "t3x-status-pill t3x-status-installed", "aria-label": L(`${item.repo} 已安装`, `${item.repo} is installed`) }, t3xIcon("check", 12), L("已安装", "Installed"))
+          ? h(ui.Badge, { variant: "success", "aria-label": L(`${item.repo} 已安装`, `${item.repo} is installed`) }, t3xIcon("check", 12), L("已安装", "Installed"))
           : h(
               ui.Button,
               {
@@ -190,7 +190,8 @@ function CommunityCard({ ui, item, busy, installing, onInstall }) {
   );
 }
 
-function MarketSkeleton({ count = 4 }) {
+function MarketSkeleton({ ui, count = 4 }) {
+  const bar = (className) => h(ui.Skeleton, { className });
   return h(
     "div",
     { className: "t3x-grid", "aria-hidden": true },
@@ -201,13 +202,32 @@ function MarketSkeleton({ count = 4 }) {
         h(
           "div",
           { className: "t3x-card-head" },
-          h("div", { className: "t3x-skel-icon" }),
-          h("div", { className: "t3x-card-id" }, h("div", { className: "t3x-skel-line t3x-skel-title" }), h("div", { className: "t3x-skel-line t3x-skel-sub" })),
+          bar("t3x-skel-icon"),
+          h("div", { className: "t3x-card-id" }, bar("t3x-skel-line t3x-skel-title"), bar("t3x-skel-line t3x-skel-sub")),
         ),
-        h("div", { className: "t3x-skel-line t3x-skel-desc" }),
-        h("div", { className: "t3x-skel-foot" }, h("div", { className: "t3x-skel-line t3x-skel-meta" }), h("div", { className: "t3x-skel-btn" })),
+        bar("t3x-skel-line t3x-skel-desc"),
+        h("div", { className: "t3x-skel-foot" }, bar("t3x-skel-line t3x-skel-meta"), bar("t3x-skel-btn")),
       ),
     ),
+  );
+}
+
+/** 空状态和出错提示用 T3 自己的 Empty / Alert，样式跟设置页其它地方一致。 */
+function EmptyState({ ui, title, description, children }) {
+  return h(
+    ui.Empty,
+    { className: "t3x-empty" },
+    h(ui.EmptyHeader, null, title ? h(ui.EmptyTitle, null, title) : null, description ? h(ui.EmptyDescription, null, description) : null),
+    children ? h(ui.EmptyContent, null, h("div", { className: "t3x-empty-actions" }, children)) : null,
+  );
+}
+
+function ErrorAlert({ ui, message, onRetry }) {
+  return h(
+    ui.Alert,
+    { variant: "error" },
+    h(ui.AlertDescription, null, message),
+    onRetry ? h(ui.AlertAction, null, h(ui.Button, { size: "xs", variant: "outline", onClick: onRetry }, L("重试", "Retry"))) : null,
   );
 }
 
@@ -276,7 +296,7 @@ function CommunityMarket({ ui, filterQuery = "", submitSeq = 0, submittedQuery =
         "div",
         { className: "t3x-group-title-wrap" },
         h("h2", { className: "t3x-group-title" }, L("社区扩展", "Community")),
-        h("span", { className: "t3x-topic-pill", title: L(`GitHub 话题：${GITHUB_TOPIC}`, `GitHub topic: ${GITHUB_TOPIC}`) }, `#${GITHUB_TOPIC}`),
+        h(ui.Badge, { variant: "outline", className: "t3x-topic-pill", title: L(`GitHub 话题：${GITHUB_TOPIC}`, `GitHub topic: ${GITHUB_TOPIC}`) }, `#${GITHUB_TOPIC}`),
         !state.loading && !state.error && visibleItems.length > 0
           ? h("span", { className: "t3x-meta" }, L(`${visibleItems.length} 个`, `${visibleItems.length}`))
           : null,
@@ -318,52 +338,32 @@ function CommunityMarket({ ui, filterQuery = "", submitSeq = 0, submittedQuery =
           "div",
           { className: "t3x-loading-wrap", "aria-busy": true, "aria-live": "polite" },
           h("p", { className: "t3x-hint" }, L("正在加载社区扩展…", "Loading community extensions…")),
-          h(MarketSkeleton, { count: 4 }),
+          h(MarketSkeleton, { ui, count: 4 }),
         )
       : null,
-    !state.loading && state.error
-      ? h(
-          "div",
-          { className: "t3x-state t3x-state-error", role: "alert" },
-          h(
-            "div",
-            { className: "t3x-state-body" },
-            t3xIcon("alert", 15, "t3x-state-icon t3x-state-icon-error"),
-            h("p", { className: "t3x-error" }, state.error),
-          ),
-          h(
-            "div",
-            { className: "t3x-state-actions" },
-            h(ui.Button, { size: "xs", variant: "outline", onClick: () => search(activeQuery, { force: true }) }, L("重试", "Retry")),
-          ),
-        )
-      : null,
+    !state.loading && state.error ? h(ErrorAlert, { ui, message: state.error, onRetry: () => search(activeQuery, { force: true }) }) : null,
     !state.loading && !state.error && visibleItems.length === 0
       ? h(
-          "div",
-          { className: "t3x-state t3x-state-empty" },
-          h(
-            "p",
-            { className: "t3x-state-title" },
-            q || activeQuery ? L(`没有找到与“${filterQuery.trim() || activeQuery}”相关的扩展`, `No extensions found for “${filterQuery.trim() || activeQuery}”`) : L("暂无社区扩展", "No community extensions"),
-          ),
-          h(
-            "p",
-            { className: "t3x-hint" },
-            canRemoteSearch
+          EmptyState,
+          {
+            ui,
+            title:
+              q || activeQuery ? L(`没有找到与“${filterQuery.trim() || activeQuery}”相关的扩展`, `No extensions found for “${filterQuery.trim() || activeQuery}”`) : L("暂无社区扩展", "No community extensions"),
+            description: canRemoteSearch
               ? L("当前列表里没有匹配项，可以按回车或在 GitHub 上远程搜索。", "No matches in the loaded list. Press Enter or search GitHub remotely.")
               : q || activeQuery
                 ? L("试试换个关键词，或清空搜索查看全部。", "Try a different keyword, or clear the search to see all extensions.")
                 : L(`给 GitHub 仓库添加 ${GITHUB_TOPIC} 话题即可出现在这里。`, `Add the ${GITHUB_TOPIC} topic to a GitHub repository to list it here.`),
-          ),
+          },
           q || activeQuery
-            ? h(
-                "div",
-                { className: "t3x-state-actions" },
-                canRemoteSearch ? h(ui.Button, { size: "xs", variant: "outline", onClick: () => search(filterQuery) }, L("在 GitHub 搜索", "Search GitHub")) : null,
+            ? [
+                canRemoteSearch
+                  ? h(ui.Button, { key: "remote", size: "xs", variant: "outline", onClick: () => search(filterQuery) }, L("在 GitHub 搜索", "Search GitHub"))
+                  : null,
                 h(
                   ui.Button,
                   {
+                    key: "clear",
                     size: "xs",
                     variant: "ghost",
                     onClick: () => {
@@ -373,7 +373,7 @@ function CommunityMarket({ ui, filterQuery = "", submitSeq = 0, submittedQuery =
                   },
                   L("清空搜索", "Clear search"),
                 ),
-              )
+              ]
             : null,
         )
       : null,

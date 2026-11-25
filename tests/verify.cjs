@@ -128,9 +128,14 @@ test("宿主设置页：无嵌套弹窗、对接 openSettings、appearancePatch 
 
   const { appearancePatch } = require("../lib/patch.cjs");
   const patched = appearancePatch.apply("/* dummy */");
-  for (const key of ["Section:cn", "Row:nn", "Switch:qt", "Button:p", "Input:h", "Select:Fe", "SelectTrigger:Pe", "SelectValue:je", "SelectPopup:Ne", "SelectItem:Ae"]) {
+  for (const key of ["Section:cn", "Row:nn", "Switch:qt", "Button:p", "Input:h", "Select:Fe", "SelectTrigger:Pe", "SelectValue:je", "SelectPopup:Ne", "SelectItem:Ae",
+    "InputGroup:Tt", "InputGroupAddon:Ct", "InputGroupInput:wt", "Alert:pt", "AlertDescription:ft", "AlertAction:t3xAlertAction", "toast:Le", "Badge:t3xBadge", "Skeleton:t3xSkeleton",
+    "Empty:t3xEmpty", "EmptyHeader:t3xEmptyHeader", "EmptyTitle:t3xEmptyTitle", "EmptyDescription:t3xEmptyDescription", "EmptyContent:t3xEmptyContent"]) {
     assert(patched.includes(key), `appearancePatch 缺少 ${key}`);
   }
+  const uiKeys = new Set(/const t3xUi=\{([^}]*)\}/.exec(patched)[1].split(",").map((s) => s.split(":")[0]));
+  const hostSrc = ["community.js", "settings.js"].map((f) => fs.readFileSync(path.join(ROOT, "host", f), "utf8")).join("\n");
+  for (const [, k] of hostSrc.matchAll(/\bui\.(\w+)/g)) assert(uiKeys.has(k), `宿主用了 ui.${k}，t3xUi 里没有`);
 });
 
 test("宿主运行时能在 ES 模块里编译", () => {
@@ -182,6 +187,20 @@ if (fs.existsSync(asarFile)) {
       const confirmName = /CONFIRM_MODULE = "\.\/([\w.-]+)"/.exec(fs.readFileSync(path.join(__dirname, "..", "host", "core.js"), "utf8"))[1];
       const toast = before.read(`apps/server/dist/client/assets/${confirmName}`).toString("utf8");
       assert(/ot as D[,}]/.test(toast) && toast.includes("function ot(e,t){if(tt.size!==0)return new Promise"), "确认框模块的导出变了");
+      // t3xUi 借用外观页已导入的别名，要确认它们来自对应模块；补的 import 要在目标模块的导出里
+      const { appearancePatch } = require("../lib/patch.cjs");
+      const appearance = before.read(findOne(before, appearancePatch.targetRegex, appearancePatch.label)).toString("utf8");
+      for (const [file, names] of [["input-group-", ["t as Tt", "n as Ct", "r as wt"]], ["alert-", ["t as pt", "r as ft"]], ["toast-", ["i as Le"]]]) {
+        const imp = new RegExp(`import\\{([^}]*)\\}from"\\./${file}`).exec(appearance);
+        for (const n of names) assert(imp && imp[1].split(",").includes(n), `外观页没有从 ${file}* 导入 ${n}`);
+      }
+      const added = [...appearancePatch.apply("").matchAll(/import\{([^}]*)\}from"\.\/([^"]+)"/g)];
+      for (const want of ["utils-", "skeleton-", "alert-", "empty-", "settingsLayout-"]) assert(added.some((m) => m[2].startsWith(want)), `appearancePatch 没有从 ${want}* 导入`);
+      for (const [, names, file] of added) {
+        const mod = before.read(`apps/server/dist/client/assets/${file}`).toString("utf8");
+        const exported = new Set([...mod.matchAll(/export\{([^}]*)\}/g)].flatMap((m) => m[1].split(",").map((s) => s.split(" as ").pop())));
+        for (const n of names.split(",")) assert(exported.has(n.split(" as ")[0]), `${file} 没有导出 ${n}`);
+      }
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

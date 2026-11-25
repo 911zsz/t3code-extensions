@@ -70,33 +70,9 @@ function matchesSearch(rec, q) {
   return fields.some((v) => typeof v === "string" && v.toLowerCase().includes(q));
 }
 
-function StatusBanner({ message, onDismiss }) {
-  if (!message) return null;
-  const cls = message.kind === "error" ? "t3x-banner t3x-error" : message.kind === "ok" ? "t3x-banner t3x-ok" : "t3x-banner t3x-info";
-  const icon = message.kind === "error" ? "alert" : "check";
-  return h(
-    "div",
-    {
-      className: cls,
-      role: message.kind === "error" ? "alert" : "status",
-      "aria-live": "polite",
-    },
-    t3xIcon(icon, 14, "t3x-banner-icon"),
-    h("span", { className: "t3x-banner-text" }, message.text),
-    onDismiss
-      ? h(
-          "button",
-          {
-            type: "button",
-            className: "t3x-banner-close",
-            "aria-label": L("关闭提示", "Dismiss notification"),
-            onClick: onDismiss,
-          },
-          t3xIcon("x", 12),
-        )
-      : null,
-  );
-}
+/** 一次性的操作结果用 T3 的 toast：不挤占页面，几秒后自己消失。持续存在的问题（比如数据没读出）才留在页面上。 */
+const TOAST_TYPES = { ok: "success", error: "error", info: "info", warning: "warning" };
+const notify = (ui, message) => message && ui.toast.add({ type: TOAST_TYPES[message.kind] ?? "info", title: message.text });
 
 /** 卡片渲染失败时的降级展示，保留移除入口。 */
 function CardFallback({ ui, rec, onMessage }) {
@@ -123,14 +99,6 @@ function ExtensionCard({ ui, rec, scopeKeys, onOpenSettings, onMessage }) {
   const checkable = canCheckUpdate(rec);
   const [reloading, setReloading] = React.useState(false);
   const [applying, setApplying] = React.useState(false);
-  const [localStatus, setLocalStatus] = React.useState(null);
-
-  React.useEffect(() => {
-    if (!localStatus || localStatus.kind === "error") return;
-    const timer = setTimeout(() => setLocalStatus(null), 3500);
-    return () => clearTimeout(timer);
-  }, [localStatus]);
-
   const sourceTextLabel = sourceLabelFor(rec.source?.kind);
   const statusText =
     rec.status === "error"
@@ -142,23 +110,25 @@ function ExtensionCard({ ui, rec, scopeKeys, onOpenSettings, onMessage }) {
   const handleReload = () => {
     if (reloading) return;
     setReloading(true);
-    setLocalStatus(null);
     // 必须在点击事件里直接调用 reloadLocal：可能需要向浏览器重新申请读取权限。
     reloadLocal(rec).then(
       () => {
         setReloading(false);
-        setLocalStatus({ kind: "ok", text: L("已重新加载本地文件", "Reloaded from local folder") });
+        onMessage?.({ kind: "ok", text: L(`已重新加载“${name}”`, `Reloaded “${name}”`) });
       },
       (error) => {
         setReloading(false);
-        setLocalStatus({ kind: "error", text: String(error?.message ?? error) });
+        onMessage?.({ kind: "error", text: L(`重新加载“${name}”失败：${error?.message ?? error}`, `Couldn’t reload “${name}”: ${error?.message ?? error}`) });
       },
     );
   };
 
-  const handleCheckUpdate = () => {
+  const handleCheckUpdate = async () => {
     if (updateInfo?.state === "checking") return;
-    refreshUpdate(rec);
+    const u = await refreshUpdate(rec);
+    if (u?.state === "latest") onMessage?.({ kind: "ok", text: L(`“${name}”已是最新版本`, `“${name}” is up to date`) });
+    else if (u?.state === "available") onMessage?.({ kind: "info", text: L(`“${name}”有新版本 v${u.item.manifest.version}`, `“${name}” has a new version v${u.item.manifest.version}`) });
+    else if (u?.state === "error") onMessage?.({ kind: "error", text: L(`检查“${name}”更新失败：${u.error}`, `Couldn’t check “${name}” for updates: ${u.error}`) });
   };
 
   const handleApplyUpdate = async () => {
@@ -227,9 +197,9 @@ function ExtensionCard({ ui, rec, scopeKeys, onOpenSettings, onMessage }) {
           { className: "t3x-card-sub" },
           h("span", { className: "t3x-card-sub-text" }, sourceTextLabel ? `${sourceTextLabel} · ${statusText}` : statusText),
           !isGlobal && state.mixed
-            ? h("span", { className: "t3x-scope-pill", title: L("这个项目在不同环境里开关不一致；切换会统一设置", "Enabled in some environments of this project but not others; toggling sets them all") }, L("部分启用", "Partially enabled"))
+            ? h(ui.Badge, { variant: "secondary", size: "sm", title: L("这个项目在不同环境里开关不一致；切换会统一设置", "Enabled in some environments of this project but not others; toggling sets them all") }, L("部分启用", "Partially enabled"))
             : !isGlobal && state.inherited
-            ? h("span", { className: "t3x-scope-pill", title: L("当前作用域未单独设置，沿用上一级开关", "No override in this scope; inheriting from parent scope") }, L("沿用上一级", "Inherited"))
+            ? h(ui.Badge, { variant: "secondary", size: "sm", title: L("当前作用域未单独设置，沿用上一级开关", "No override in this scope; inheriting from parent scope") }, L("沿用上一级", "Inherited"))
             : null,
         ),
       ),
@@ -242,68 +212,8 @@ function ExtensionCard({ ui, rec, scopeKeys, onOpenSettings, onMessage }) {
       },
       summary || L("暂无简介", "No description"),
     ),
-    rec.error
-      ? h(
-          "div",
-          { className: "t3x-card-notice t3x-card-notice-error", role: "alert", title: rec.error },
-          t3xIcon("alert", 13, "t3x-notice-icon"),
-          h("span", { className: "t3x-notice-text" }, rec.error),
-        )
-      : null,
-    localStatus
-      ? h(
-          "div",
-          {
-            className: localStatus.kind === "error" ? "t3x-card-notice t3x-card-notice-error" : "t3x-card-notice t3x-card-notice-ok",
-            role: localStatus.kind === "error" ? "alert" : "status",
-            title: localStatus.text,
-          },
-          t3xIcon(localStatus.kind === "error" ? "alert" : "check", 13, "t3x-notice-icon"),
-          h("span", { className: "t3x-notice-text" }, localStatus.text),
-        )
-      : null,
-    updateInfo
-      ? updateInfo.state === "available"
-        ? h(
-            "div",
-            { className: "t3x-card-update-bar", role: "status" },
-            h("span", { className: "t3x-notice-text" }, L(`发现新版本 v${updateInfo.item.manifest.version}`, `New version v${updateInfo.item.manifest.version}`)),
-            h(
-              ui.Button,
-              { size: "xs", variant: "default", disabled: applying, onClick: handleApplyUpdate },
-              applying
-                ? L("更新中…", "Updating…")
-                : L(`更新至 v${updateInfo.item.manifest.version}`, `Update to v${updateInfo.item.manifest.version}`),
-            ),
-          )
-        : h(
-            "div",
-            {
-              className:
-                updateInfo.state === "error"
-                  ? "t3x-card-notice t3x-card-notice-error"
-                  : updateInfo.state === "latest"
-                    ? "t3x-card-notice t3x-card-notice-ok"
-                    : "t3x-card-notice",
-              role: updateInfo.state === "error" ? "alert" : "status",
-              title: updateInfo.error || undefined,
-            },
-            t3xIcon(
-              updateInfo.state === "error" ? "alert" : updateInfo.state === "latest" ? "check" : "refresh",
-              13,
-              updateInfo.state === "checking" ? "t3x-notice-icon t3x-spin" : "t3x-notice-icon",
-            ),
-            h(
-              "span",
-              { className: "t3x-notice-text" },
-              updateInfo.state === "checking"
-                ? L("正在检查更新…", "Checking for updates…")
-                : updateInfo.state === "latest"
-                  ? L("已是最新版本", "Up to date")
-                  : updateInfo.error,
-            ),
-          )
-      : null,
+    // 启用失败是持续的状态，留在卡片上；其余结果走 toast。
+    rec.error ? h(ui.Alert, { variant: "error", className: "t3x-card-alert", title: rec.error }, h(ui.AlertDescription, null, rec.error)) : null,
     h(
       "div",
       { className: "t3x-card-foot" },
@@ -354,6 +264,13 @@ function ExtensionCard({ ui, rec, scopeKeys, onOpenSettings, onMessage }) {
       h(
         "div",
         { className: "t3x-card-foot-right" },
+        updateInfo?.state === "available"
+          ? h(
+              ui.Button,
+              { size: "xs", variant: "default", disabled: applying, onClick: handleApplyUpdate },
+              applying ? L("更新中…", "Updating…") : L(`更新至 v${updateInfo.item.manifest.version}`, `Update to v${updateInfo.item.manifest.version}`),
+            )
+          : null,
         !isGlobal && !scopeUnavailable && !state.inherited
           ? h(
               ui.Button,
@@ -375,8 +292,12 @@ function ExtensionCard({ ui, rec, scopeKeys, onOpenSettings, onMessage }) {
                 variant: "ghost",
                 className: "t3x-icon-btn",
                 disabled: reloadable ? reloading : isChecking,
-                "aria-label": reloadable ? L(`重新加载 ${name}`, `Reload ${name}`) : L(`检查 ${name} 更新`, `Check for updates to ${name}`),
-                title: reloadable ? L("重新加载本地扩展", "Reload local extension") : L("检查更新", "Check for updates"),
+                "aria-label": reloadable
+                  ? L(`重新加载 ${name}`, `Reload ${name}`)
+                  : isChecking
+                    ? L(`正在检查 ${name} 更新`, `Checking ${name} for updates`)
+                    : L(`检查 ${name} 更新`, `Check for updates to ${name}`),
+                title: reloadable ? L("重新加载本地扩展", "Reload local extension") : isChecking ? L("正在检查更新…", "Checking for updates…") : L("检查更新", "Check for updates"),
                 onClick: reloadable ? handleReload : handleCheckUpdate,
               },
               t3xIcon("refresh", 13, reloading || isChecking ? "t3x-spin" : ""),
@@ -420,7 +341,7 @@ function MarketCard({ ui, entry, onInstall, busy, installing }) {
           { className: "t3x-card-title-row" },
           h("h3", { className: "t3x-card-name", title: name }, name),
           entry.version ? h("span", { className: "t3x-ver" }, `v${entry.version}`) : null,
-          h("span", { className: "t3x-badge t3x-badge-ok", title: L("安装时按注册表逐个文件校验 SHA-256", "Each file is verified against the registry’s SHA-256 checksum during installation") }, L("已校验", "Verified")),
+          h(ui.Badge, { variant: "success", title: L("安装时按注册表逐个文件校验 SHA-256", "Each file is verified against the registry’s SHA-256 checksum during installation") }, L("已校验", "Verified")),
         ),
         h(
           "div",
@@ -451,7 +372,7 @@ function MarketCard({ ui, entry, onInstall, busy, installing }) {
         "div",
         { className: "t3x-card-foot-right" },
         upToDate
-          ? h("span", { className: "t3x-status-pill t3x-status-installed" }, t3xIcon("check", 12), L("已安装", "Installed"))
+          ? h(ui.Badge, { variant: "success" }, t3xIcon("check", 12), L("已安装", "Installed"))
           : h(
               ui.Button,
               {
@@ -516,7 +437,7 @@ function ExtensionSettingsView({ ui, rec, onBack }) {
             { className: "t3x-detail-title-row" },
             h("h1", { ref: titleRef, tabIndex: -1, className: "t3x-detail-title" }, name),
             h("span", { className: "t3x-ver" }, `v${manifest.version}`),
-            sourceTextLabel ? h("span", { className: "t3x-badge" }, sourceTextLabel) : null,
+            sourceTextLabel ? h(ui.Badge, { variant: "outline" }, sourceTextLabel) : null,
           ),
           summary ? h("p", { className: "t3x-detail-desc" }, summary) : null,
         ),
@@ -588,7 +509,7 @@ function ExtensionsPage({ ui, scope }) {
   const [markets, setMarkets] = React.useState({});
   const [urlInput, setUrlInput] = React.useState("");
   const [busyKey, setBusyKey] = React.useState(null);
-  const [message, setMessage] = React.useState(null);
+  const setMessage = (message) => notify(ui, message);
 
   const folderRef = React.useRef(null);
   const zipRef = React.useRef(null);
@@ -631,7 +552,6 @@ function ExtensionsPage({ ui, scope }) {
 
   const run = async (key, task) => {
     setBusyKey(key);
-    setMessage(null);
     try {
       const res = await task();
       if (res && typeof res === "object") setMessage(res);
@@ -722,7 +642,6 @@ function ExtensionsPage({ ui, scope }) {
   const handleRefreshAll = async () => {
     if (refreshing || !ready) return;
     setRefreshing(true);
-    setMessage(null);
     if (typeof searchCache !== "undefined") searchCache.clear();
     setBrowseRefreshSeq((n) => n + 1);
     if (activeTab === "browse") {
@@ -735,10 +654,12 @@ function ExtensionsPage({ ui, scope }) {
       const avail = results.filter((u) => u.state === "available").length;
       const errs = results.filter((u) => u.state === "error");
       if (avail > 0) {
-        setMessage({
-          kind: "ok",
-          text: L(`发现 ${avail} 个可用更新`, `${avail} ${avail === 1 ? "update" : "updates"} available`),
-        });
+        const found = L(`发现 ${avail} 个可用更新`, `${avail} ${avail === 1 ? "update" : "updates"} available`);
+        setMessage(
+          errs.length > 0
+            ? { kind: "warning", text: L(`${found}；另有 ${errs.length} 个检查失败：${errs[0].error}`, `${found}; ${errs.length} failed to check: ${errs[0].error}`) }
+            : { kind: "ok", text: found },
+        );
       } else if (errs.length > 0) {
         const firstErr = errs[0].error;
         setMessage({
@@ -749,7 +670,7 @@ function ExtensionsPage({ ui, scope }) {
               : L(`部分扩展检查更新失败：${firstErr}`, `Couldn’t check some extensions for updates: ${firstErr}`),
         });
       } else if (checked.length > 0) {
-        setMessage({ kind: "info", text: L("所有扩展均已是最新版本", "All extensions are up to date") });
+        setMessage({ kind: "ok", text: L("所有扩展均已是最新版本", "All extensions are up to date") });
       }
     } finally {
       setRefreshing(false);
@@ -807,25 +728,17 @@ function ExtensionsPage({ ui, scope }) {
     "div",
     { className: "t3x-loading-wrap", "aria-busy": true, "aria-live": "polite" },
     h("p", { className: "t3x-hint" }, L("正在载入扩展…", "Loading extensions…")),
-    h(MarketSkeleton, { count: 4 }),
+    h(MarketSkeleton, { ui, count: 4 }),
   );
+  const storageAlert = persistent
+    ? null
+    : h(ui.Alert, { variant: "error" }, h(ui.AlertDescription, null, L("扩展数据没能读出：这次的修改只在内存里，重启后会丢失。", "Couldn’t load extension data. Changes made now will be lost when you restart.")));
 
   if (settingsActive) {
     return h(
       "div",
       { className: "t3x-page" },
-      !persistent
-        ? h(
-            "div",
-            { className: "t3x-banner t3x-error", role: "alert" },
-            t3xIcon("alert", 14, "t3x-banner-icon"),
-            h(
-              "span",
-              { className: "t3x-banner-text" },
-              L("扩展数据没能读出：这次的修改只在内存里，重启后会丢失。", "Couldn’t load extension data. Changes made now will be lost when you restart."),
-            ),
-          )
-        : null,
+      storageAlert,
       h(ExtensionSettingsView, { ui, rec: settingsRec, onBack: () => setSettingsId(null) }),
     );
   }
@@ -890,16 +803,7 @@ function ExtensionsPage({ ui, scope }) {
       ),
     ),
 
-    // 持久化警告与操作结果横幅
-    !persistent
-      ? h(
-          "div",
-          { className: "t3x-banner t3x-error", role: "alert" },
-          t3xIcon("alert", 14, "t3x-banner-icon"),
-          h("span", { className: "t3x-banner-text" }, L("扩展数据没能读出：这次的修改只在内存里，重启后会丢失。", "Couldn’t load extension data. Changes made now will be lost when you restart.")),
-        )
-      : null,
-    h(StatusBanner, { message, onDismiss: () => setMessage(null) }),
+    storageAlert,
 
     // 全宽搜索框
     h(
@@ -915,11 +819,10 @@ function ExtensionsPage({ ui, scope }) {
         },
       },
       h(
-        "div",
-        { className: "t3x-search-field" },
-        t3xIcon("search", 14, "t3x-search-icon"),
-        h("input", {
-          className: "t3x-input t3x-search-input",
+        ui.InputGroup,
+        null,
+        h(ui.InputGroupAddon, null, t3xIcon("search", 14)),
+        h(ui.InputGroupInput, {
           type: "search",
           "aria-label": L("搜索扩展", "Search extensions"),
           placeholder: searchPlaceholder,
@@ -928,14 +831,9 @@ function ExtensionsPage({ ui, scope }) {
         }),
         searchQuery
           ? h(
-              "button",
-              {
-                type: "button",
-                className: "t3x-search-clear",
-                "aria-label": L("清除搜索词", "Clear search"),
-                onClick: () => setSearchQuery(""),
-              },
-              t3xIcon("x", 12),
+              ui.InputGroupAddon,
+              { align: "inline-end" },
+              h(ui.Button, { type: "button", size: "icon-xs", variant: "ghost", "aria-label": L("清除搜索词", "Clear search"), onClick: () => setSearchQuery("") }, t3xIcon("x", 12)),
             )
           : null,
       ),
@@ -966,7 +864,7 @@ function ExtensionsPage({ ui, scope }) {
             onKeyDown: (ev) => handleTabKeyDown(ev, idx),
           },
           h("span", null, tab.label()),
-          count !== null ? h("span", { className: "t3x-tab-count" }, String(count)) : null,
+          count !== null ? h(ui.Badge, { variant: "secondary", size: "sm" }, String(count)) : null,
         );
       }),
     ),
@@ -987,22 +885,19 @@ function ExtensionsPage({ ui, scope }) {
             ? renderCardGrid(filteredInstalled)
             : installedList.length === 0
               ? h(
-                  "div",
-                  { className: "t3x-state t3x-state-empty" },
-                  h("p", { className: "t3x-state-title" }, L("尚未安装扩展", "No installed extensions yet")),
-                  h("p", { className: "t3x-hint" }, L("可以在“浏览”里发现社区扩展、通过链接或 ZIP 安装，或点击右上角添加本地扩展。", "Discover community extensions in Browse, install via URL or ZIP, or add a local extension above.")),
-                  h(
-                    "div",
-                    { className: "t3x-state-actions" },
-                    h(ui.Button, { size: "xs", variant: "outline", onClick: () => setActiveTab("browse") }, L("浏览扩展市场", "Browse extensions")),
-                    h(ui.Button, { size: "xs", variant: "ghost", disabled: busy, onClick: () => zipRef.current?.click() }, t3xIcon("zip", 13), L("上传 ZIP", "Upload ZIP")),
-                  ),
+                  EmptyState,
+                  {
+                    ui,
+                    title: L("尚未安装扩展", "No installed extensions yet"),
+                    description: L("可以在“浏览”里发现社区扩展、通过链接或 ZIP 安装，或点击右上角添加本地扩展。", "Discover community extensions in Browse, install via URL or ZIP, or add a local extension above."),
+                  },
+                  h(ui.Button, { size: "xs", variant: "outline", onClick: () => setActiveTab("browse") }, L("浏览扩展市场", "Browse extensions")),
+                  h(ui.Button, { size: "xs", variant: "ghost", disabled: busy, onClick: () => zipRef.current?.click() }, t3xIcon("zip", 13), L("上传 ZIP", "Upload ZIP")),
                 )
               : h(
-                  "div",
-                  { className: "t3x-state t3x-state-empty" },
-                  h("p", { className: "t3x-state-title" }, L(`没有找到与“${searchQuery.trim()}”匹配的已安装扩展`, `No installed extensions match “${searchQuery.trim()}”`)),
-                  h("div", { className: "t3x-state-actions" }, h(ui.Button, { size: "xs", variant: "outline", onClick: () => setSearchQuery("") }, L("清空搜索", "Clear search"))),
+                  EmptyState,
+                  { ui, title: L(`没有找到与“${searchQuery.trim()}”匹配的已安装扩展`, `No installed extensions match “${searchQuery.trim()}”`) },
+                  h(ui.Button, { size: "xs", variant: "outline", onClick: () => setSearchQuery("") }, L("清空搜索", "Clear search")),
                 )
           : h(
                 "div",
@@ -1018,13 +913,13 @@ function ExtensionsPage({ ui, scope }) {
                       "form",
                       { className: "t3x-url-row", onSubmit: addUrl },
                       h(
-                        "div",
+                        ui.InputGroup,
                         { className: "t3x-url-field" },
-                        t3xIcon("link", 13, "t3x-search-icon"),
-                        h("input", {
+                        h(ui.InputGroupAddon, null, t3xIcon("link", 13)),
+                        h(ui.InputGroupInput, {
                           id: "t3x-manual-url",
-                          className: "t3x-input t3x-url-input",
                           type: "url",
+                          size: "sm",
                           "aria-label": L("通过链接安装或添加市场", "Install via URL or add marketplace"),
                           placeholder: L("粘贴 GitHub 仓库、plugin.json 或市场 index.json 链接…", "Paste a GitHub repo, plugin.json, or index.json URL…"),
                           value: urlInput,
@@ -1109,19 +1004,10 @@ function ExtensionsPage({ ui, scope }) {
                         ),
                       ),
                       isLoading ? h("p", { className: "t3x-hint" }, L("正在读取市场…", "Loading marketplace…")) : null,
-                      m?.error
-                        ? h(
-                            "div",
-                            { className: "t3x-state t3x-state-error", role: "alert" },
-                            h("div", { className: "t3x-state-body" }, t3xIcon("alert", 15, "t3x-state-icon t3x-state-icon-error"), h("p", { className: "t3x-error" }, m.error)),
-                            h("div", { className: "t3x-state-actions" }, h(ui.Button, { size: "xs", variant: "outline", onClick: () => loadRegistry(u) }, L("重试", "Retry"))),
-                          )
-                        : null,
-                      m?.extensions && m.extensions.length === 0
-                        ? h("div", { className: "t3x-state t3x-state-empty" }, h("p", { className: "t3x-hint" }, L("这个市场目前没有扩展。", "This marketplace has no extensions yet.")))
-                        : null,
+                      m?.error ? h(ErrorAlert, { ui, message: m.error, onRetry: () => loadRegistry(u) }) : null,
+                      m?.extensions && m.extensions.length === 0 ? h(EmptyState, { ui, description: L("这个市场目前没有扩展。", "This marketplace has no extensions yet.") }) : null,
                       m?.extensions && m.extensions.length > 0 && filteredEntries.length === 0
-                        ? h("div", { className: "t3x-state t3x-state-empty" }, h("p", { className: "t3x-hint" }, L("当前市场中没有匹配的扩展。", "No matching extensions in this marketplace.")))
+                        ? h(EmptyState, { ui, description: L("当前市场中没有匹配的扩展。", "No matching extensions in this marketplace.") })
                         : null,
                       filteredEntries.length > 0
                         ? h(
