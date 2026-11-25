@@ -4,38 +4,41 @@ const h = React.createElement;
 const sourceLabelFor = (kind) =>
   ({ registry: L("市场", "Marketplace"), url: L("链接", "Link"), local: L("本地", "Local"), zip: "ZIP", github: "GitHub" })[kind] ?? "";
 
-function consent(item, verified) {
+// T3 的确认框按换行拆标题和说明：插进去的名字、版本、来源压成一行。
+const oneLine = (v) => String(v ?? "").replace(/\s+/g, " ").trim();
+const changedWhileConfirming = () => new Error(L("确认期间这个扩展有变化，请重试", "The extension changed while you were confirming. Try again."));
+
+/** 安装确认。确认框是异步的：确认期间同 id 的扩展被换掉的话，作废这次确认。 */
+async function consent(item) {
   const { manifest } = item;
-  const name = localized(manifest, "name");
+  const before = records.get(manifest.id);
+  const name = oneLine(localized(manifest, "name"));
+  const version = oneLine(manifest.version);
   const old = replacing(item);
   const replace = !old
     ? ""
     : old.sameSource
-      ? L(`\n\n会把已安装的 ${old.version} 升级到 ${manifest.version}。`, `\n\nThis will upgrade the installed version from ${old.version} to ${manifest.version}.`)
-      : L(`\n\n注意：会替换已安装的同 id 扩展“${old.name}” ${old.version}（来源：${old.from}），新代码会继续使用它保存的数据。`, `\n\nThis will replace “${old.name}” ${old.version} (source: ${old.from}), which has the same ID. The new code will use the existing extension data.`);
-  return window.confirm(
-    L(`安装“${name}” ${manifest.version}？\n\n`, `Install “${name}” ${manifest.version}?\n\n`) +
-      L(
-        "扩展代码会以完整权限在 T3 Code 里运行：能读取你的对话、调用本机的 T3 服务。只安装你信任的来源。\n\n",
-        "Extension code runs with full access in T3 Code. It can read your conversations and call local T3 services. Install only from sources you trust.\n\n",
-      ) +
-      L(`来源：${sourceText(item.source)}\n`, `Source: ${sourceText(item.source)}\n`) +
-      (verified
-        ? L("已按注册表逐个文件校验 SHA-256。", "Each file was verified against the registry’s SHA-256 checksum.")
-        : item.source.kind === "github"
-          ? L("社区扩展，未经审核。已固定到上面这个提交，作者之后改代码不会影响你装的这份。", "This community extension is unreviewed. It is pinned to the commit above, so future changes won’t affect your installation.")
-          : L("这个来源没有校验值。", "This source does not provide checksums.")) +
-      replace,
+      ? L(`\n从 ${oneLine(old.version)} 升级到 ${version}。`, `\nUpgrades ${oneLine(old.version)} to ${version}.`)
+      : L(`\n会替换已安装的“${oneLine(old.name)}” ${oneLine(old.version)}（${oneLine(old.from)}），沿用它的设置。`, `\nReplaces the installed “${oneLine(old.name)}” ${oneLine(old.version)} (${oneLine(old.from)}) and keeps its settings.`);
+  const ok = await showConfirm(
+    L(`安装“${name}” ${version}？`, `Install “${name}” ${version}?`) +
+      L(`\n来源：${oneLine(sourceText(item.source))}`, `\nSource: ${oneLine(sourceText(item.source))}`) +
+      replace +
+      L("\n扩展在 T3 Code 里运行，可以读取会话内容。", "\nExtensions run inside T3 Code and can read your threads."),
   );
+  if (ok && records.get(manifest.id) !== before) throw changedWhileConfirming();
+  return ok;
 }
 
-const remove = (manifest) => {
-  const name = localized(manifest, "name");
-  return (
-    window.confirm(L(`移除扩展“${name}”？它保存的设置和数据也会删除。`, `Remove “${name}”? Its saved settings and data will also be deleted.`)) &&
-    uninstall(manifest.id).catch((error) => window.alert(L(`移除失败：${error.message}`, `Couldn’t remove the extension: ${error.message}`)))
-  );
-};
+async function remove(manifest) {
+  const before = records.get(manifest.id);
+  const name = oneLine(localized(manifest, "name"));
+  const ok = await showConfirm(L(`移除“${name}”？\n它的设置和数据会一起删除。`, `Remove “${name}”?\nIts settings and data will be deleted too.`), { variant: "destructive" });
+  if (!ok) return false;
+  if (records.get(manifest.id) !== before) throw changedWhileConfirming();
+  await uninstall(manifest.id);
+  return true;
+}
 
 // 整个区块也包一层：宿主自己出错时只显示一行提示，不连累 T3 的设置页。
 const HOST_REC = { manifest: { id: "t3x-host" } };
@@ -96,12 +99,12 @@ function StatusBanner({ message, onDismiss }) {
 }
 
 /** 卡片渲染失败时的降级展示，保留移除入口。 */
-function CardFallback({ ui, rec }) {
+function CardFallback({ ui, rec, onMessage }) {
   return h(
     "article",
     { className: "t3x-card t3x-card-fallback" },
     h("p", { className: "t3x-error" }, L(`${rec.manifest.id}：这张卡片显示不了`, `Couldn’t display the card for ${rec.manifest.id}`)),
-    h(ui.Button, { size: "xs", variant: "outline", onClick: () => remove(rec.manifest) }, L("移除", "Remove")),
+    h(ui.Button, { size: "xs", variant: "outline", onClick: () => remove(rec.manifest).catch((error) => onMessage?.({ kind: "error", text: L(`移除失败：${error?.message ?? error}`, `Couldn’t remove the extension: ${error?.message ?? error}`) })) }, L("移除", "Remove")),
   );
 }
 
@@ -162,12 +165,13 @@ function ExtensionCard({ ui, rec, scopeKeys, onOpenSettings, onMessage }) {
     if (applying || updateInfo?.state !== "available") return;
     setApplying(true);
     try {
-      const next = updateInfo.item;
-      if (!consent(next, false)) {
+      const confirmed = updateInfo; // 装的必须是确认框里展示的那份
+      const next = confirmed.item;
+      if (!(await consent(next))) {
         onMessage?.({ kind: "info", text: L("已取消更新", "Update canceled") });
         return;
       }
-      await applyUpdate(id);
+      await applyUpdate(id, confirmed);
       onMessage?.({ kind: "ok", text: L(`已更新“${name}”至 v${next.manifest.version}`, `Updated “${name}” to v${next.manifest.version}`) });
     } catch (error) {
       onMessage?.({ kind: "error", text: L(`更新失败：${error?.message ?? error}`, `Update failed: ${error?.message ?? error}`) });
@@ -177,12 +181,10 @@ function ExtensionCard({ ui, rec, scopeKeys, onOpenSettings, onMessage }) {
   };
 
   const handleRemove = async () => {
-    const res = remove(manifest);
-    if (res && typeof res.then === "function") {
-      await res;
-      if (!records.has(id)) {
-        onMessage?.({ kind: "ok", text: L(`已移除“${name}”`, `Removed “${name}”`) });
-      }
+    try {
+      if (await remove(manifest)) onMessage?.({ kind: "ok", text: L(`已移除“${name}”`, `Removed “${name}”`) });
+    } catch (error) {
+      onMessage?.({ kind: "error", text: L(`移除失败：${error?.message ?? error}`, `Couldn’t remove the extension: ${error?.message ?? error}`) });
     }
   };
 
@@ -650,7 +652,7 @@ function ExtensionsPage({ ui, scope }) {
       if (entry.version && item.manifest.version !== entry.version) {
         throw new Error(L(`注册表写的版本是 ${entry.version}，下载到的是 ${item.manifest.version}`, `The registry lists version ${entry.version}, but the download contains ${item.manifest.version}`));
       }
-      if (!consent(item, true)) return { kind: "info", text: L("已取消安装", "Installation canceled") };
+      if (!(await consent(item))) return { kind: "info", text: L("已取消安装", "Installation canceled") };
       await install(item);
       setActiveTab("installed");
       return { kind: "ok", text: L(`已安装“${localized(item.manifest, "name")}”`, `Installed “${localized(item.manifest, "name")}”`) };
@@ -661,7 +663,7 @@ function ExtensionsPage({ ui, scope }) {
     run(key, async () => {
       const item = await load();
       if (!item) return null;
-      if (!consent(item, item.source.kind === "registry")) return { kind: "info", text: L("已取消安装", "Installation canceled") };
+      if (!(await consent(item))) return { kind: "info", text: L("已取消安装", "Installation canceled") };
       await install(item);
       setActiveTab("installed");
       return { kind: "ok", text: L(`已安装“${localized(item.manifest, "name")}”`, `Installed “${localized(item.manifest, "name")}”`) };
@@ -703,7 +705,7 @@ function ExtensionsPage({ ui, scope }) {
         };
       }
       const item = await fetchExtension(target, null);
-      if (!consent(item, false)) return { kind: "info", text: L("已取消安装", "Installation canceled") };
+      if (!(await consent(item))) return { kind: "info", text: L("已取消安装", "Installation canceled") };
       await install(item);
       setUrlInput("");
       setActiveTab("installed");
@@ -789,7 +791,7 @@ function ExtensionsPage({ ui, scope }) {
       items.map((rec) =>
         h(
           Guard,
-          { key: rec.manifest.id, rec: HOST_REC, fallback: h(CardFallback, { ui, rec }) },
+          { key: rec.manifest.id, rec: HOST_REC, fallback: h(CardFallback, { ui, rec, onMessage: setMessage }) },
           h(ExtensionCard, {
             ui,
             rec,

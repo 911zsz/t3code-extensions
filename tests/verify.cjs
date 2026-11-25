@@ -124,6 +124,7 @@ test("宿主设置页：无嵌套弹窗、对接 openSettings、appearancePatch 
   assert(!cssSrc.includes(".t3x-dialog-backdrop"), "不应保留嵌套设置弹窗样式");
   assert(settingsSrc.includes("takeSettingsRequest("), "设置页应调用 takeSettingsRequest()");
   assert(settingsSrc.includes("subscribeSettingsRequest("), "设置页应订阅 subscribeSettingsRequest()");
+  assert(!/window\.(confirm|alert|prompt)\(/.test(settingsSrc), "设置页的确认框要用 T3 自己的（showConfirm），不用浏览器原生弹窗");
 
   const { appearancePatch } = require("../lib/patch.cjs");
   const patched = appearancePatch.apply("/* dummy */");
@@ -177,6 +178,10 @@ if (fs.existsSync(asarFile)) {
       const menuName = /CONTEXT_MENU_MODULE = "\.\/([\w.-]+)"/.exec(fs.readFileSync(path.join(__dirname, "..", "host", "core.js"), "utf8"))[1];
       const menu = before.read(`apps/server/dist/client/assets/${menuName}`).toString("utf8");
       assert(menu.includes("export{c as n,u as r,l as t}") && /function u\(n,r\)\{return l\(\),new Promise/.test(menu), "右键菜单模块的导出变了");
+      // showConfirm 动态引入 T3 的确认框：导出名 D 是 confirm(message, { variant })，没有确认框挂载时返回 undefined
+      const confirmName = /CONFIRM_MODULE = "\.\/([\w.-]+)"/.exec(fs.readFileSync(path.join(__dirname, "..", "host", "core.js"), "utf8"))[1];
+      const toast = before.read(`apps/server/dist/client/assets/${confirmName}`).toString("utf8");
+      assert(/ot as D[,}]/.test(toast) && toast.includes("function ot(e,t){if(tt.size!==0)return new Promise"), "确认框模块的导出变了");
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -242,6 +247,34 @@ test("GitHub 来源：ref 限制、仓库 ID、限流提示（模拟网络）", 
   await assert.rejects(api.resolveGithub(t), /约 2 分钟后恢复/);
   fail = { status: 403, headers: { "x-ratelimit-remaining": "15" } };
   await assert.rejects(api.resolveGithub(t), /拒绝/);
+});
+
+test("确认框是异步的：标题不被换行拆坏，确认期间扩展被换掉就作废", async () => {
+  const { hostSource } = require("../lib/build.cjs");
+  const ctx = vm.createContext({ bind: { React: { Component: class {} }, jsx: {}, choices: () => [] }, console, URL, TextDecoder, TextEncoder });
+  vm.runInContext(`${hostSource()}\nthis.api = { records, updates, consent, remove, applyUpdate };`, ctx);
+  const { records, updates, consent, remove, applyUpdate } = ctx.api;
+  const seen = [];
+  let during = () => {};
+  ctx.showConfirm = async (message, options) => (seen.push([message, options]), during(), true);
+  const rec = (version) => ({ manifest: { id: "demo", name: "D", version }, source: { kind: "zip", file: "a.zip" } });
+
+  await consent({ ...rec("1.0.0"), manifest: { id: "x", name: "A\nB", version: "1.0.0" } });
+  assert.equal(seen[0][0].split("\n")[0], "安装“A B” 1.0.0？"); // T3 取第一行带问号的当标题
+
+  const old = rec("1.0.0");
+  records.set("demo", old);
+  during = () => records.set("demo", rec("1.1.0"));
+  await assert.rejects(consent(rec("2.0.0")), /确认期间/);
+
+  records.set("demo", old);
+  await assert.rejects(remove(old.manifest), /确认期间/);
+  assert.equal(seen.at(-1)[1].variant, "destructive");
+  assert(records.has("demo"), "确认期间被换掉的扩展不能被删");
+
+  const confirmed = { state: "available", item: rec("2.0.0"), rec: records.get("demo") };
+  updates.set("demo", { ...confirmed }); // 确认期间又刷新过一次
+  await assert.rejects(applyUpdate("demo", confirmed), /重新检查/);
 });
 
 test("zip 解包：存储和 deflate、外壳目录、大小上限", async () => {

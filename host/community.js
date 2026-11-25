@@ -125,10 +125,10 @@ function CommunityCard({ ui, item, busy, installing, onInstall }) {
           h(
             "span",
             {
-              className: "t3x-badge t3x-badge-warn",
-              title: L("社区扩展未经审核，安装时会固定到当前提交", "Community extensions are unreviewed and pinned to the current commit when installed"),
+              className: "t3x-badge",
+              title: L("GitHub 上的社区扩展，安装时固定到当前提交", "A community extension from GitHub, pinned to the current commit when installed"),
             },
-            L("未审核", "Unreviewed"),
+            L("社区", "Community"),
           ),
         ),
         h(

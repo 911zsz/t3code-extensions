@@ -692,11 +692,6 @@ html.dark .t3x-card-icon {
   line-height: 1;
   color: var(--muted-foreground);
 }
-.t3x-badge-warn {
-  border-color: color-mix(in srgb, var(--warning, var(--muted-foreground)) 32%, transparent);
-  background: var(--warning-surface, color-mix(in srgb, var(--warning, var(--muted-foreground)) 12%, transparent));
-  color: var(--warning-foreground, var(--muted-foreground));
-}
 .t3x-badge-ok {
   border-color: color-mix(in srgb, var(--success, var(--muted-foreground)) 30%, transparent);
   background: color-mix(in srgb, var(--success, var(--muted-foreground)) 10%, transparent);

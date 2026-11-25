@@ -141,12 +141,11 @@ async function refreshAllUpdates() {
   for (const rec of [...records.values()]) if (canCheckUpdate(rec)) await refreshUpdate(rec);
 }
 
-/** 装上检查到的新版本（调用方先弹 consent 确认）。 */
-async function applyUpdate(id) {
+/** 装上用户确认过的那份检查结果 confirmed（调用方先弹 consent 确认）。 */
+async function applyUpdate(id, confirmed) {
   const u = updates.get(id);
-  if (u?.state !== "available") return;
-  // 检查之后扩展又被安装、替换或移除过：这份结果可能比现在装的还旧，要求重新检查。
-  if (records.get(id) !== u.rec) {
+  // 确认期间又刷新过（结果被换掉），或者检查之后扩展又被安装、替换或移除过：要求重新检查。
+  if (u !== confirmed || u?.state !== "available" || records.get(id) !== u.rec) {
     updates.delete(id);
     bump();
     throw new Error(L("扩展在检查之后变过，请重新检查更新", "The extension changed after the check. Check for updates again."));

@@ -222,6 +222,14 @@ function showContextMenu(items, position) {
   return contextMenuModule.then((m) => m.r(items, position));
 }
 
+// T3 自己的确认框（删除会话用的那个）：以“？”结尾的那行是标题，其余行是说明；返回 true/false。
+const CONFIRM_MODULE = "./toast-DoB9Gbxj.js";
+let confirmModule = null;
+function showConfirm(message, options) {
+  confirmModule ??= import(CONFIRM_MODULE);
+  return confirmModule.then(async (m) => (await m.D(message, options)) ?? false); // 确认框没挂载时 T3 也当作取消
+}
+
 // 扩展要求打开自己的设置（比如桌宠右键菜单）：跳到 设置 → 扩展，设置页挂载时或已挂载时取走这个 id。
 let settingsRequest = null;
 const settingsRequestListeners = new Set();
