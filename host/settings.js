@@ -1,4 +1,4 @@
-// 设置 → 扩展 页。ui 是 T3 原生的 Section / Row / Switch / Button，scope 是当前选中的项目/环境作用域。
+// 设置 → 扩展 页。ui 是 T3 原生的 Section / Row / Switch / Button / Input / Select 系列，scope 是当前选中的项目/环境作用域。
 
 const h = React.createElement;
 const sourceLabelFor = (kind) =>
@@ -503,70 +503,85 @@ function MarketCard({ ui, entry, onInstall, busy, installing }) {
   );
 }
 
-/** 扩展设置弹层：全宽空间承载长设置面板（如桌宠设置），不破坏两列卡片网格。 */
-function ExtensionSettingsDialog({ ui, rec, onClose }) {
-  const dialogRef = React.useRef(null);
-  const name = localized(rec.manifest, "name");
+/** 扩展设置内联视图：在扩展页内直接进入详情与设置，不再在设置浮层上叠加弹窗。 */
+function ExtensionSettingsView({ ui, rec, onBack }) {
+  const { manifest } = rec;
+  const name = localized(manifest, "name");
+  const summary = localized(manifest, "description");
+  const detailsUrl = detailsUrlFor(rec);
+  const sourceTextLabel = rec.builtin
+    ? L("内置", "Built-in")
+    : rec.overridesBuiltin
+      ? L("已更新版本", "Updated")
+      : sourceLabelFor(rec.source?.kind);
 
+  const titleRef = React.useRef(null);
   React.useEffect(() => {
-    dialogRef.current?.focus({ preventScroll: true });
-    const onKey = (ev) => {
-      if (ev.key === "Escape") {
-        ev.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
+    const scroller = document.querySelector("[data-settings-page-scroll]");
+    if (scroller) scroller.scrollTop = 0;
+    titleRef.current?.focus({ preventScroll: true }); // 点“设置”的按钮已经卸载，焦点交给标题
+  }, [manifest.id]);
 
   return h(
     "div",
-    {
-      className: "t3x-dialog-backdrop",
-      onClick: (ev) => {
-        if (ev.target === ev.currentTarget) onClose();
-      },
-    },
+    { className: "t3x-detail", "data-extension-settings": manifest.id },
     h(
       "div",
-      {
-        ref: dialogRef,
-        className: "t3x-dialog",
-        role: "dialog",
-        tabIndex: -1,
-        "aria-modal": true,
-        "aria-labelledby": "t3x-dialog-title",
-      },
+      { className: "t3x-detail-nav" },
+      h(
+        ui.Button,
+        {
+          size: "xs",
+          variant: "ghost",
+          className: "t3x-back-btn",
+          onClick: onBack,
+        },
+        t3xIcon("arrowLeft", 14),
+        L("返回扩展", "Back to extensions"),
+      ),
+    ),
+    h(
+      "header",
+      { className: "t3x-detail-head" },
       h(
         "div",
-        { className: "t3x-dialog-head" },
+        { className: "t3x-detail-id" },
+        h("div", { className: "t3x-card-icon t3x-detail-icon", "aria-hidden": true }, t3xIcon("plugin", 19)),
         h(
           "div",
-          { className: "t3x-dialog-title-group" },
-          h("div", { className: "t3x-card-icon t3x-card-icon-sm", "aria-hidden": true }, t3xIcon("plugin", 15)),
-          h("h2", { id: "t3x-dialog-title", className: "t3x-dialog-title" }, L(`${name} 设置`, `${name} settings`)),
-          h("span", { className: "t3x-ver" }, `v${rec.manifest.version}`),
-        ),
-        h(
-          "button",
-          {
-            type: "button",
-            className: "t3x-dialog-close",
-            "aria-label": L("关闭设置", "Close settings"),
-            onClick: onClose,
-          },
-          t3xIcon("x", 15),
+          { className: "t3x-detail-meta" },
+          h(
+            "div",
+            { className: "t3x-detail-title-row" },
+            h("h1", { ref: titleRef, tabIndex: -1, className: "t3x-detail-title" }, name),
+            h("span", { className: "t3x-ver" }, `v${manifest.version}`),
+            sourceTextLabel ? h("span", { className: rec.overridesBuiltin ? "t3x-badge t3x-badge-accent" : "t3x-badge" }, sourceTextLabel) : null,
+          ),
+          summary ? h("p", { className: "t3x-detail-desc" }, summary) : null,
         ),
       ),
+      detailsUrl
+        ? h(
+            "a",
+            {
+              className: "t3x-details-link t3x-detail-ext-link",
+              href: detailsUrl,
+              target: "_blank",
+              rel: "noreferrer",
+              title: detailsUrl,
+            },
+            t3xIcon(isGithubUrl(detailsUrl) ? "github" : "external", 14),
+            h("span", null, L("详情", "Details")),
+          )
+        : null,
+    ),
+    h(
+      "div",
+      { className: "t3x-detail-body" },
       h(
-        "div",
-        { className: "t3x-dialog-body" },
-        h(
-          Guard,
-          { rec, fallback: h("p", { className: "t3x-error" }, L("设置面板出错", "The settings panel encountered an error")) },
-          h(rec.settings, { ui }),
-        ),
+        Guard,
+        { rec, fallback: h("p", { className: "t3x-error" }, L("设置面板出错", "The settings panel encountered an error")) },
+        h(rec.settings, { ui }),
       ),
     ),
   );
@@ -600,10 +615,10 @@ function ExtensionsPage({ ui, scope }) {
   const registryUrls = useStored("t3x:registries", []);
 
   const [activeTab, setActiveTabState] = React.useState(lastActiveTab);
-  const setActiveTab = (tab) => {
+  const setActiveTab = React.useCallback((tab) => {
     lastActiveTab = tab;
     setActiveTabState(tab);
-  };
+  }, []);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [browseSubmit, setBrowseSubmit] = React.useState({ seq: 0, query: "" });
   const [browseRefreshSeq, setBrowseRefreshSeq] = React.useState(0);
@@ -620,6 +635,20 @@ function ExtensionsPage({ ui, scope }) {
   const tabRefs = React.useRef({});
   const busy = busyKey !== null;
 
+  const openRequested = React.useCallback(() => {
+    const reqId = takeSettingsRequest();
+    if (!reqId) return;
+    // 返回时落在这个扩展所在的标签：内置扩展（含被 GitHub 版覆盖的）在“内置”。
+    const req = records.get(reqId);
+    setActiveTab(req?.builtin || req?.overridesBuiltin ? "builtin" : "installed");
+    setSettingsId(reqId);
+  }, [setActiveTab]);
+
+  React.useEffect(() => {
+    openRequested();
+    return subscribeSettingsRequest(openRequested);
+  }, [openRequested]);
+
   const loadRegistry = (u) => {
     setMarkets((all) => ({ ...all, [u]: { loading: true } }));
     fetchRegistry(u)
@@ -635,12 +664,12 @@ function ExtensionsPage({ ui, scope }) {
     }
   }, [activeTab, registryUrls]);
 
-  // 打开的设置面板对应扩展被停用或卸载时自动关闭弹层。
+  // 打开的设置视图对应扩展被停用或卸载时自动回到列表；冷启动尚未就绪时等待加载完成。
   const settingsRec = settingsId ? records.get(settingsId) : null;
   const settingsActive = settingsRec && settingsRec.status === "on" && !!settingsRec.settings;
   React.useEffect(() => {
-    if (settingsId && !settingsActive) setSettingsId(null);
-  }, [settingsId, settingsActive]);
+    if (ready && settingsId && !settingsActive) setSettingsId(null);
+  }, [ready, settingsId, settingsActive]);
 
   const run = async (key, task) => {
     setBusyKey(key);
@@ -828,6 +857,26 @@ function ExtensionsPage({ ui, scope }) {
     h("p", { className: "t3x-hint" }, L("正在载入扩展…", "Loading extensions…")),
     h(MarketSkeleton, { count: 4 }),
   );
+
+  if (settingsActive) {
+    return h(
+      "div",
+      { className: "t3x-page" },
+      !persistent
+        ? h(
+            "div",
+            { className: "t3x-banner t3x-error", role: "alert" },
+            t3xIcon("alert", 14, "t3x-banner-icon"),
+            h(
+              "span",
+              { className: "t3x-banner-text" },
+              L("扩展数据没能读出：这次的修改只在内存里，重启后会丢失。", "Couldn’t load extension data. Changes made now will be lost when you restart."),
+            ),
+          )
+        : null,
+      h(ExtensionSettingsView, { ui, rec: settingsRec, onBack: () => setSettingsId(null) }),
+    );
+  }
 
   return h(
     "div",
@@ -1149,8 +1198,5 @@ function ExtensionsPage({ ui, scope }) {
                 }),
               ),
     ),
-
-    // 扩展设置弹层
-    settingsActive ? h(ExtensionSettingsDialog, { ui, rec: settingsRec, onClose: () => setSettingsId(null) }) : null,
   );
 }

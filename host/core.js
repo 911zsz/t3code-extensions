@@ -211,6 +211,35 @@ function compile(id, code) {
   return fn;
 }
 
+// 右键菜单：用 T3 自己画的那套（网页版的右键菜单，和 T3 下拉菜单同一套样式），不用 macOS 原生菜单。
+// 宿主追加在 _chat 模块里，相对路径从 assets 目录解析；文件名带构建哈希，补丁本来就只认 0.1.11。
+// items 格式同 desktopBridge.showContextMenu：{ id, label, detail, icon, checked, disabled, separatorBefore, children }，返回选中项 id 或 null。
+const CONTEXT_MENU_MODULE = "./contextMenuFallback-BO-iYrql.js";
+let contextMenuModule = null;
+function showContextMenu(items, position) {
+  contextMenuModule ??= import(CONTEXT_MENU_MODULE);
+  return contextMenuModule.then((m) => m.r(items, position));
+}
+
+// 扩展要求打开自己的设置（比如桌宠右键菜单）：跳到 设置 → 扩展，设置页挂载时或已挂载时取走这个 id。
+let settingsRequest = null;
+const settingsRequestListeners = new Set();
+function requestSettings(id) {
+  settingsRequest = id;
+  for (const fn of settingsRequestListeners) fn();
+  if (location.hash !== "#/settings/extensions") location.hash = "#/settings/extensions"; // T3 桌面版用 hash 路由
+}
+/** 设置页调用：取走待打开设置的扩展 id，取一次就清空。 */
+function takeSettingsRequest() {
+  const id = settingsRequest;
+  settingsRequest = null;
+  return id;
+}
+function subscribeSettingsRequest(fn) {
+  settingsRequestListeners.add(fn);
+  return () => settingsRequestListeners.delete(fn);
+}
+
 // life 是这一次启用的生命周期：停用后 alive=false，扩展晚到的异步回调再注册什么都不生效。
 function makeApi(rec, life) {
   const id = rec.manifest.id;
@@ -248,6 +277,8 @@ function makeApi(rec, life) {
       rec.settings = Component;
       bump();
     },
+    openSettings: () => requestSettings(id),
+    contextMenu: showContextMenu,
     storage: {
       get: (key, fallback) => store.get(own(key), fallback),
       set: (key, value) => store.set(own(key), value),

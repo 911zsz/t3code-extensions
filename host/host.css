@@ -742,81 +742,83 @@ html.dark .t3x-scope-pill {
   color: var(--success-foreground, var(--success, var(--foreground)));
 }
 
-/* 设置弹层 */
-.t3x-dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  background: color-mix(in srgb, var(--background) 62%, rgba(0, 0, 0, 0.55));
-  backdrop-filter: blur(2px);
-}
-.t3x-dialog {
+/* 扩展设置内联详情视图 */
+.t3x-detail {
   display: flex;
   flex-direction: column;
-  width: min(740px, 100%);
-  max-height: min(82vh, 760px);
-  border-radius: 13px;
-  border: 1px solid var(--border);
-  background: var(--popover, var(--card, var(--background)));
+  gap: 20px;
+}
+.t3x-detail-nav {
+  display: flex;
+  align-items: center;
+}
+.t3x-back-btn {
+  margin-left: -8px;
+  gap: 5px;
+  color: var(--muted-foreground);
+}
+.t3x-back-btn:hover {
   color: var(--foreground);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
-  overflow: hidden;
-  outline: none;
 }
-.t3x-dialog-head {
+.t3x-detail-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  padding: 13px 16px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-  flex-shrink: 0;
+  gap: 12px 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
 }
-.t3x-dialog-title-group {
+.t3x-detail-id {
   display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+.t3x-detail-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+}
+.t3x-detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.t3x-detail-title-row {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   min-width: 0;
 }
-.t3x-dialog-title {
+.t3x-detail-title {
+  outline: none; /* 只是进入设置时的焦点落点，不可交互 */
   margin: 0;
-  font-size: 14.5px;
+  font-size: 18px;
   font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
   color: var(--foreground);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.t3x-dialog-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
+.t3x-detail-desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
   color: var(--muted-foreground);
-  cursor: pointer;
+  max-width: 64ch;
 }
-.t3x-dialog-close:hover {
-  color: var(--foreground);
-  background: color-mix(in srgb, var(--accent) 85%, transparent);
+.t3x-detail-ext-link {
+  flex-shrink: 0;
+  margin-left: 0;
+  margin-top: 2px;
 }
-.t3x-dialog-close:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 1px;
-}
-.t3x-dialog-body {
-  padding: 16px;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
+.t3x-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
 /* 加载骨架屏 */

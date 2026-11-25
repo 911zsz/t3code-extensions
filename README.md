@@ -10,7 +10,7 @@
 |---|---|
 | 边缘光 `edge-glow` | 需要审批（琥珀）、等你回答（蓝）、出错（红）、后台跑完（绿）时窗口边缘亮光。动效档位：省电 / 混合 / 30fps |
 | 推理强度滑条 `effort-slider` | 把模型面板里“推理强度”的档位列表换成竖向分档滑条（最高档在上，档名写在刻度旁边），档位越高星点越亮越快，最高档流动星云。星点动效：跟随档位 / 静态 / 关闭 |
-| 桌宠 `desk-pets` | 输入框上沿站着当前 agent 的像素宠物，跟会话状态动；子代理各派一只到旁边干活、收工击掌；每只都能单独拖，拖到另一只身上会互动；窗口不在前台或切到别的会话时错过的进出场，回来补播。每个 agent 用哪只、宠物库（增删改）都在设置里 |
+| 桌宠 `desk-pets` | 输入框上沿站着当前 agent 的像素宠物，跟会话状态动；子代理各派一只到旁边干活、收工击掌；每只都能单独拖，拖到另一只身上会互动；窗口不在前台或切到别的会话时错过的进出场，回来补播。右键宠物有菜单（T3 样式）：换一只、打个招呼、安静模式、桌宠设置、隐藏；隐藏后右键输入框里的模型选择器叫回。每个 agent 用哪只、宠物库（增删改）在设置里 |
 
 另有示例扩展 `examples/hello-badge`（右下角显示 agent 和会话状态），放在市场里演示安装流程，也是写扩展的模板。
 
@@ -40,7 +40,7 @@ node install.cjs uninstall           # 先退出应用
 设置 → 扩展：
 
 - 顶部 “Applying settings for [项目] on [环境]” 是 T3 自己的作用域选择。选了具体项目或环境后，开关只影响那里的会话（项目 > 环境 > 全局，没单独设的显示“沿用上一级”，可以“重置”）。只管显示与否：扩展代码只要在任一作用域开着就会加载，扩展自己的设置全局共用。
-- **已安装**：自己装的扩展。开关、设置（弹层）、移除、刷新（GitHub 来源检查更新；本地插件重新读取文件夹）。
+- **已安装**：自己装的扩展。开关、设置、移除、刷新（GitHub 来源检查更新；本地插件重新读取文件夹）。
 - **浏览**：
   - 社区扩展：GitHub 上带 `t3code-extension` 话题的仓库，按 star 排序，默认列出前 30 个，其余靠搜索。标着“未审核”，安装时固定到某个提交。
   - 也可以填 GitHub 仓库地址、`plugin.json` 链接或第三方市场的 `index.json` 链接，或者上传 zip。
@@ -75,6 +75,8 @@ my-ext/
 }
 ```
 
+`apiVersion`：用到设置面板的 `Input` / `Select` 系列、`host.openSettings()` 或 `host.contextMenu()` 时写 `2`，旧版宿主会拒绝安装；只用其余接口写 `1`。
+
 `repository` 可选：扩展的 GitHub 仓库，卡片上的“详情”链接到这里。内置扩展另有 `repositoryId`（仓库的数字 ID），从仓库检查更新时用它确认还是原来那个仓库。
 
 `locales` 可选：`name`、`description` 在另一种语言下的版本（`en` 或 `zh`），设置页按 T3 的界面语言显示。
@@ -87,10 +89,12 @@ my-ext/
 |---|---|
 | `host.React`、`host.h` | T3 自己的 React 和 `createElement` |
 | `host.register(slot, Component)` | 挂到挂载点，返回取消函数 |
-| `host.settings(Component)` | 扩展设置面板；props 里的 `ui` 是 T3 原生的 `Section` / `Row` / `Switch` / `Button` |
+| `host.settings(Component)` | 扩展设置面板；props 里的 `ui` 是 T3 原生的 `Section` / `Row` / `Switch` / `Button` / `Input` / `Select` / `SelectTrigger` / `SelectValue` / `SelectPopup` / `SelectItem` |
 | `host.storage.get/set/subscribe/use(key, fallback)` | 扩展自己的持久化存储（IndexedDB），`use` 是 React hook |
 | `host.files.list/text/url(path)` | 扩展包里的文件；`url` 给素材的 data URL |
 | `host.style(css)` | 追加样式，停用时自动移除 |
+| `host.openSettings()` | 跳到 设置 → 扩展，打开本扩展的设置 |
+| `host.contextMenu(items, { x, y })` | 弹出 T3 样式的右键菜单，返回选中项的 `id`（没选是 `null`）。项：`{ id, label, detail?, icon?, checked?, disabled?, separatorBefore?, children? }`，`icon` 只能用 T3 内置的几个名字（如 `settings`） |
 | `host.chat.last()` | 最近一次聊天视图的会话状态（设置页里也能拿到 provider 列表） |
 | `host.lang()`、`host.useLang()` | 当前界面语言：T3 是中文时为 `"zh"`，其他语言都是 `"en"`。`useLang` 是 React hook，切语言时触发重绘 |
 | `host.t(中文, 英文)` | 按当前界面语言二选一；在渲染时调用，组件里先调一次 `host.useLang()` |

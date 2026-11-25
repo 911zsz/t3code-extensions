@@ -26,7 +26,8 @@ test("plugin.json 校验", () => {
   const ok = { id: "demo", apiVersion: 1, name: "Demo", version: "1.0.0", entries: { web: "web.js" } };
   assert.deepEqual(pure.t3xCheckManifest(ok, { "web.js": "" }).web, ["web.js"]);
   assert.throws(() => pure.t3xCheckManifest({ ...ok, id: "Bad Id" }), /id/);
-  assert.throws(() => pure.t3xCheckManifest({ ...ok, apiVersion: 2 }), /apiVersion/);
+  assert.throws(() => pure.t3xCheckManifest({ ...ok, apiVersion: 3 }), /apiVersion/);
+  pure.t3xCheckManifest({ ...ok, apiVersion: 2 }); // 2 用到设置面板的 Input / Select 和 openSettings
   assert.throws(() => pure.t3xCheckManifest({ ...ok, entries: { web: "../x.js" } }), /路径/);
   assert.throws(() => pure.t3xCheckManifest({ ...ok, entries: { web: ["a.js", "a.js"] } }), /两次/);
   assert.deepEqual(pure.t3xCheckManifest({ ...ok, locales: { en: { name: "Demo", description: "d" } } }, { "web.js": "" }).web, ["web.js"]);
@@ -92,6 +93,9 @@ test("桌宠：agent → 宠物", () => {
   assert.equal(pets.petFor("antigravity", "", map, has), "codex"); // gemini 不在库里，退回 codex
   assert.equal(pets.petFor("opencode", "claude-sonnet-5", map, has), "claude"); // 未知 harness 按模型名
   assert.equal(pets.petFor("opencode", "gpt", map, has), "codex");
+  // 右键菜单“换一只”在没有 driver 时写 modelKey 给出的那项，写完 petFor 要能选中它
+  assert.deepEqual([pets.modelKey("claude-opus-5"), pets.modelKey("gemini-4"), pets.modelKey("gpt"), pets.modelKey(null)].join(), "claudeAgent,antigravity,*,*");
+  assert.equal(pets.petFor(null, "claude-opus-5", { ...map, [pets.modelKey("claude-opus-5")]: "codex" }, has), "codex");
   assert.equal(pets.petFor("cursor", "", { ...map, cursor: "none" }, has), null);
   assert.equal(pets.petFor("cursor", "", { ...map, "*": "none" }, has), null);
   assert.equal(pets.petFor("claudeAgent", "gpt", { ...map, claudeAgent: "auto" }, has), "codex"); // 明确选“按模型名”不回到默认
@@ -365,6 +369,8 @@ function createPetsHarness({ stageWidth = 600, focused = true, hidden = false } 
   const ctrl = createPetController({
     catalog,
     position: { get: () => posVal, set: (v) => (posVal = v) },
+    quiet: () => false,
+    onMenu: () => ctrl.hide(),
   });
 
   const stage = () => hostEl.children.find((c) => c.className === "t3x-pet-stage") ?? null;
@@ -829,20 +835,52 @@ function fakeHost(ext, calls) {
   const storage = new Map();
   return {
     id: ext.manifest.id,
-    React: { useState: () => [], useRef: () => ({}), useEffect() {}, useReducer: () => [] },
-    h: () => null,
+    React: { useState: (v) => [typeof v === "function" ? v() : v, () => {}], useRef: (v) => ({ current: v }), useEffect() {}, useReducer: () => [] },
+    h: (type, props, ...children) => ({ type, props: props ?? {}, children }),
     register: (slot, c) => calls.push(["register", slot, typeof c]),
-    settings: (c) => calls.push(["settings", typeof c]),
+    settings: (c) => calls.push(["settings", typeof c, c]),
     storage: { get: (k, f) => (storage.has(k) ? storage.get(k) : f), set: (k, v) => storage.set(k, v), subscribe: () => () => {}, use: (k, f) => f },
     files: { list: () => Object.keys(ext.files), text: (p) => ext.files[p], url: (p) => (ext.files[p]?.startsWith("data:") ? ext.files[p] : null) },
     style: (css) => (calls.push(["style", css.length]), () => {}),
     onDispose() {},
     chat: { last: () => null },
+    lang: () => "zh",
+    useLang: () => "zh",
+    t: (zh) => zh,
   };
+}
+
+function makeFakeUi() {
+  const mk = (name) => Object.assign(function FakeUiComponent() {}, { uiName: name });
+  return {
+    Section: mk("Section"),
+    Row: mk("Row"),
+    Switch: mk("Switch"),
+    Button: mk("Button"),
+    Input: mk("Input"),
+    Select: mk("Select"),
+    SelectTrigger: mk("SelectTrigger"),
+    SelectValue: mk("SelectValue"),
+    SelectPopup: mk("SelectPopup"),
+    SelectItem: mk("SelectItem"),
+  };
+}
+
+function walkTree(node, visit) {
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node)) {
+    for (const item of node) walkTree(item, visit);
+    return;
+  }
+  visit(node);
+  if (node.props?.control) walkTree(node.props.control, visit);
+  if (node.props?.headerAction) walkTree(node.props.headerAction, visit);
+  if (node.children) walkTree(node.children, visit);
 }
 
 test("内置扩展和示例扩展在宿主包装里编译并激活", () => {
   const list = builtins();
+  const ui = makeFakeUi();
   assert.deepEqual(list.map((b) => b.manifest.id), ["edge-glow", "effort-slider", "desk-pets"]);
   for (const ext of [...list, ...EXAMPLES.map((id) => readExtension(path.join(ROOT, "examples", id)))]) {
     const web = pure.t3xCheckManifest(ext.manifest, ext.files).web;
@@ -861,8 +899,37 @@ test("内置扩展和示例扩展在宿主包装里编译并激活", () => {
     const calls = [];
     const cleanup = run(fakeHost(ext, calls));
     assert(calls.some((c) => c[0] === "register"), `${ext.manifest.id} 没有注册挂载点`);
-    assert(calls.some((c) => c[0] === "settings"), `${ext.manifest.id} 没有设置面板`);
+    const settingsCall = calls.find((c) => c[0] === "settings");
+    assert(settingsCall, `${ext.manifest.id} 没有设置面板`);
+    // 三个内置扩展的设置面板都能用新版 t3xUi 正常渲染，且不使用原生 <select> 或 checkbox
+    if (["edge-glow", "effort-slider", "desk-pets"].includes(ext.manifest.id)) {
+      const tree = settingsCall[2]({ ui });
+      const used = new Set();
+      walkTree(tree, (n) => {
+        if (typeof n.type === "string") used.add(n.type);
+        else if (n.type?.uiName) used.add(n.type.uiName);
+      });
+      assert(used.has("Section") && used.has("Row") && used.has("Select"), `${ext.manifest.id} 设置面板应使用 Section/Row/Select`);
+      assert(!used.has("select"), `${ext.manifest.id} 设置面板不应使用原生 <select>`);
+    }
     if (cleanup) cleanup();
+  }
+  const deskPetsSettings = fs.readFileSync(path.join(ROOT, "extensions/desk-pets/settings.js"), "utf8");
+  assert(!deskPetsSettings.includes("controller.unhide"), "desk-pets/settings.js 不应再调用 controller.unhide()");
+});
+
+test("宿主设置页：无嵌套弹窗、对接 openSettings、appearancePatch 暴露完整 t3xUi", () => {
+  const settingsSrc = fs.readFileSync(path.join(ROOT, "host/settings.js"), "utf8");
+  const cssSrc = fs.readFileSync(path.join(ROOT, "host/host.css"), "utf8");
+  assert(!settingsSrc.includes("ExtensionSettingsDialog"), "不应保留嵌套设置弹窗组件");
+  assert(!cssSrc.includes(".t3x-dialog-backdrop"), "不应保留嵌套设置弹窗样式");
+  assert(settingsSrc.includes("takeSettingsRequest("), "设置页应调用 takeSettingsRequest()");
+  assert(settingsSrc.includes("subscribeSettingsRequest("), "设置页应订阅 subscribeSettingsRequest()");
+
+  const { appearancePatch } = require("../lib/patch.cjs");
+  const patched = appearancePatch.apply("/* dummy */");
+  for (const key of ["Section:cn", "Row:nn", "Switch:qt", "Button:p", "Input:h", "Select:Fe", "SelectTrigger:Pe", "SelectValue:je", "SelectPopup:Ne", "SelectItem:Ae"]) {
+    assert(patched.includes(key), `appearancePatch 缺少 ${key}`);
   }
 });
 
@@ -907,6 +974,10 @@ if (fs.existsSync(asarFile)) {
         same += 1;
       }
       assert(same > 10);
+      // host.contextMenu 动态引入 T3 自己的右键菜单模块：文件要在 _chat 同目录，导出名 r 是 show(items, position)
+      const menuName = /CONTEXT_MENU_MODULE = "\.\/([\w.-]+)"/.exec(fs.readFileSync(path.join(__dirname, "..", "host", "core.js"), "utf8"))[1];
+      const menu = before.read(`apps/server/dist/client/assets/${menuName}`).toString("utf8");
+      assert(menu.includes("export{c as n,u as r,l as t}") && /function u\(n,r\)\{return l\(\),new Promise/.test(menu), "右键菜单模块的导出变了");
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
