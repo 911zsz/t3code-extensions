@@ -1,3 +1,5 @@
 node_modules/
 .DS_Store
 *.asar.patched
+# 自己加的、不想公开的桌宠：local-pets/<id>/pet.json + sheet.webp，构建时并入桌宠扩展
+local-pets/

@@ -31,9 +31,9 @@ node install.cjs uninstall           # 先退出应用
 
 ### 本机桌宠素材
 
-`local-pets/<id>/pet.json` + `sheet.webp` 里的宠物（Clawd、Moffy）安装时并入桌宠扩展，显示为“本机”。也可以自己往里加，或者装好后在设置里“添加桌宠”上传。
+桌宠扩展自带 Codex、Clawd、Moffy 三只（`extensions/desk-pets/pets/`，参数在 `pets.js`）。Clawd、Moffy 是作者自己绘制的同人像素形象，仅供非商业使用；角色形象本身归原权利方所有（Clawd 是 Anthropic 的 Claude 吉祥物）。如有异议请开 issue，会撤下。
 
-这两只是作者自己绘制的同人像素形象，仅供非商业使用；角色形象本身归原权利方所有（Clawd 是 Anthropic 的 Claude 吉祥物）。如有异议请开 issue，会撤下。
+自己画的、不想公开的宠物放在 `local-pets/<id>/pet.json` + `sheet.webp`（已在 `.gitignore`），安装时并入桌宠扩展，显示为“本机”。也可以装好后在设置里“添加桌宠”上传。
 
 ## 使用
 
@@ -180,4 +180,4 @@ node lib/split.cjs ../t3x-repos   # 把三个内置扩展写到各自的仓库�
 
 ## 许可
 
-MIT。T3 Code 是 T3 Tools Inc. 的项目；本仓库不分发 T3 Code（安装时复制你本机的官方版），只在 `lib/patch.cjs` 里留了几段用于定位的压缩代码片段。`local-pets/` 里的同人宠物形象见上文说明，不在 MIT 授权范围内。
+MIT。T3 Code 是 T3 Tools Inc. 的项目；本仓库不分发 T3 Code（安装时复制你本机的官方版），只在 `lib/patch.cjs` 里留了几段用于定位的压缩代码片段。桌宠里 Clawd、Moffy 的形象见上文说明，不在 MIT 授权范围内。

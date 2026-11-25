@@ -810,9 +810,14 @@ test("桌宠：导入的宠物定义要清洗", () => {
   assert.throws(() => pets.cleanPet({ id: "ok", sheet: "javascript:alert(1)" }), /精灵图/);
   assert.throws(() => pets.cleanPet({ id: "ok", sheet: "data:image/png;base64,AA)\"" }), /精灵图/);
   assert.match(pets.petCss(p), /^\.t3x-pet\[data-pet="my-1"\]\{--t3x-pet-sink:4px;--t3x-pet-scale:1\.2\}html\.dark/);
-  // 本机桌宠的变量全部是合法值，清洗后一个不少
-  for (const id of fs.existsSync(path.join(ROOT, "local-pets")) ? fs.readdirSync(path.join(ROOT, "local-pets")) : []) {
-    const def = JSON.parse(fs.readFileSync(path.join(ROOT, "local-pets", id, "pet.json"), "utf8"));
+  // 随扩展发布的宠物和本机桌宠，变量全部是合法值，清洗后一个不少
+  const bundled = vm.runInNewContext(`${fs.readFileSync(path.join(ROOT, "extensions/desk-pets/pets.js"), "utf8")};BUNDLED_PETS`);
+  assert.equal(bundled.map((p) => p.id).join(","), "claude,gemini");
+  const localDefs = (fs.existsSync(path.join(ROOT, "local-pets")) ? fs.readdirSync(path.join(ROOT, "local-pets")) : [])
+    .filter((id) => fs.existsSync(path.join(ROOT, "local-pets", id, "pet.json")))
+    .map((id) => JSON.parse(fs.readFileSync(path.join(ROOT, "local-pets", id, "pet.json"), "utf8")));
+  for (const def of [...bundled, ...localDefs]) {
+    const id = def.id;
     const clean = pets.cleanPet({ ...def, sheet });
     assert.equal(Object.keys(clean.vars).length, Object.keys(def.vars).length, id);
     assert.equal(Object.keys(clean.darkVars).length, Object.keys(def.darkVars ?? {}).length, id);
