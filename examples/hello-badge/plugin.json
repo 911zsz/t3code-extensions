@@ -1,0 +1,11 @@
+{
+  "id": "hello-badge",
+  "apiVersion": 1,
+  "name": "示例：会话状态角标",
+  "version": "1.0.0",
+  "description": "写扩展的最小示例：右下角显示当前 agent 和会话状态。",
+  "author": "t3-extensions",
+  "locales": { "en": { "name": "Example: thread status badge", "description": "A minimal extension example that shows the current agent and thread state in the bottom-right corner." } },
+  "permissions": ["ui"],
+  "entries": { "web": "web.js", "styles": ["styles.css"] }
+}

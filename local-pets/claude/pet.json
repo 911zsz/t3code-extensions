@@ -1,0 +1,33 @@
+{
+  "id": "claude",
+  "name": "Clawd",
+  "pixelFx": true,
+  "badgeBottom": 40,
+  "vars": {
+    "--t3x-pet-scale": "1.125",
+    "--t3x-pet-sink": "calc(var(--t3x-pet-w) * 0.114)",
+    "--t3x-pet-shadow-bottom": "calc(var(--t3x-pet-w) * 0.066)",
+    "--t3x-pet-origin-y": "92%",
+    "--t3x-pet-fx-beam-h": "72%",
+    "--t3x-pet-fx-beam-b": "8%",
+    "--t3x-pet-fx-burst-top": "68%",
+    "--t3x-pet-fx-poke-top": "18%",
+    "--t3x-pet-fx-beam": "radial-gradient(ellipse 11% 42% at 50% 54%, #fff3ec 0%, #f2a488 40%, transparent 72%), radial-gradient(ellipse 34% 38% at 50% 56%, rgba(217, 119, 87, 0.84) 0%, rgba(217, 119, 87, 0.28) 50%, transparent 72%), radial-gradient(ellipse 46% 32% at 50% 58%, rgba(217, 119, 87, 0.2) 0%, transparent 70%)",
+    "--t3x-pet-fx-sparks": "linear-gradient(#d97757, #d97757) 18% 24% / 4px 4px no-repeat, linear-gradient(#c65e3d, #c65e3d) 82% 20% / 4px 4px no-repeat, linear-gradient(#f09f83, #f09f83) 28% 12% / 3px 3px no-repeat, linear-gradient(#d97757, #d97757) 10% 58% / 5px 5px no-repeat, linear-gradient(#f09f83, #f09f83) 88% 54% / 4px 4px no-repeat, linear-gradient(#c65e3d, #c65e3d) 76% 74% / 3px 3px no-repeat, linear-gradient(#d97757, #d97757) 30% 82% / 4px 4px no-repeat, linear-gradient(#d97757, #d97757) 68% 84% / 3px 3px no-repeat",
+    "--t3x-pet-fx-poke-sparks": "linear-gradient(#d97757, #d97757) 26% 62% / 4px 4px no-repeat, linear-gradient(#c65e3d, #c65e3d) 50% 22% / 4px 4px no-repeat, linear-gradient(#f09f83, #f09f83) 74% 58% / 4px 4px no-repeat",
+    "--t3x-sub-greet-top": "22%",
+    "--t3x-sub-highfive-top": "44%",
+    "--t3x-sub-droop-top": "36%",
+    "--t3x-sub-greet-fx": "linear-gradient(#d97757, #d97757) 44% 38% / 4px 4px no-repeat, linear-gradient(#c65e3d, #c65e3d) 62% 24% / 3px 3px no-repeat, linear-gradient(#f09f83, #f09f83) 24% 64% / 4px 4px no-repeat, linear-gradient(#d97757, #d97757) 72% 58% / 3px 3px no-repeat",
+    "--t3x-sub-hf-ring": "radial-gradient(circle, transparent 38%, rgba(217, 119, 87, 0.84) 54%, rgba(240, 159, 131, 0.3) 66%, transparent 76%)",
+    "--t3x-sub-hf-sparks": "linear-gradient(#d97757, #d97757) 50% 10% / 4px 4px no-repeat, linear-gradient(#c65e3d, #c65e3d) 86% 28% / 4px 4px no-repeat, linear-gradient(#f09f83, #f09f83) 84% 72% / 4px 4px no-repeat, linear-gradient(#d97757, #d97757) 48% 88% / 3px 3px no-repeat, linear-gradient(#c65e3d, #c65e3d) 14% 70% / 4px 4px no-repeat, linear-gradient(#f09f83, #f09f83) 16% 28% / 4px 4px no-repeat"
+  },
+  "darkVars": {
+    "--t3x-pet-fx-beam": "radial-gradient(ellipse 11% 44% at 50% 54%, #ffffff 0%, #f8beaa 38%, transparent 72%), radial-gradient(ellipse 34% 40% at 50% 56%, rgba(229, 134, 103, 0.92) 0%, rgba(217, 119, 87, 0.34) 50%, transparent 72%), radial-gradient(ellipse 46% 34% at 50% 58%, rgba(217, 119, 87, 0.26) 0%, transparent 70%)",
+    "--t3x-pet-fx-sparks": "linear-gradient(#e58667, #e58667) 18% 24% / 4px 4px no-repeat, linear-gradient(#f8beaa, #f8beaa) 82% 20% / 4px 4px no-repeat, linear-gradient(#fff1ea, #fff1ea) 28% 12% / 3px 3px no-repeat, linear-gradient(#d97757, #d97757) 10% 58% / 5px 5px no-repeat, linear-gradient(#f8beaa, #f8beaa) 88% 54% / 4px 4px no-repeat, linear-gradient(#fff1ea, #fff1ea) 76% 74% / 3px 3px no-repeat, linear-gradient(#e58667, #e58667) 30% 82% / 4px 4px no-repeat, linear-gradient(#d97757, #d97757) 68% 84% / 3px 3px no-repeat",
+    "--t3x-pet-fx-poke-sparks": "linear-gradient(#e58667, #e58667) 26% 62% / 4px 4px no-repeat, linear-gradient(#fff1ea, #fff1ea) 50% 22% / 4px 4px no-repeat, linear-gradient(#f8beaa, #f8beaa) 74% 58% / 4px 4px no-repeat",
+    "--t3x-sub-greet-fx": "linear-gradient(#fff1ea, #fff1ea) 44% 38% / 4px 4px no-repeat, linear-gradient(#f8beaa, #f8beaa) 62% 24% / 3px 3px no-repeat, linear-gradient(#e58667, #e58667) 24% 64% / 4px 4px no-repeat, linear-gradient(#d97757, #d97757) 72% 58% / 3px 3px no-repeat",
+    "--t3x-sub-hf-ring": "radial-gradient(circle, transparent 38%, rgba(248, 190, 170, 0.92) 52%, rgba(217, 119, 87, 0.36) 66%, transparent 76%)",
+    "--t3x-sub-hf-sparks": "linear-gradient(#fff1ea, #fff1ea) 50% 10% / 4px 4px no-repeat, linear-gradient(#f8beaa, #f8beaa) 86% 28% / 4px 4px no-repeat, linear-gradient(#e58667, #e58667) 84% 72% / 4px 4px no-repeat, linear-gradient(#f8beaa, #f8beaa) 48% 88% / 3px 3px no-repeat, linear-gradient(#d97757, #d97757) 14% 70% / 4px 4px no-repeat, linear-gradient(#fff1ea, #fff1ea) 16% 28% / 4px 4px no-repeat"
+  }
+}

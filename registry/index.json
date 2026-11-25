@@ -1,0 +1,92 @@
+{
+  "name": "T3 Code Extensions",
+  "apiVersion": 1,
+  "extensions": [
+    {
+      "id": "edge-glow",
+      "name": "边缘光",
+      "version": "1.0.0",
+      "description": "需要审批、等你回答、出错或在后台跑完时，窗口边缘亮起对应颜色的光。",
+      "author": "t3-extensions",
+      "locales": {
+        "en": {
+          "name": "Edge glow",
+          "description": "Lights up the window edge when an approval is needed, the agent is waiting for your answer, an error occurs, or a background run finishes."
+        }
+      },
+      "manifest": "../extensions/edge-glow/plugin.json",
+      "sha256": {
+        "plugin.json": "65a994495f02954117efcd1480dbe9650041c647c0f7fe1785fe713be9b773bf",
+        "logic.js": "5aa32594f25d701ca1cea5a86e51b043d0ccd6a8d1fe7f67d8427a9482ea1760",
+        "web.js": "474f88183542e7875715a7c2053c8c260a8f82a54377d0ab6314ea40c16f8af1",
+        "styles.css": "ecae9a08eb80c2dfa06f0c0c42fb3b2e6dd99cce45ac56c21d84d65dde2cc84c"
+      }
+    },
+    {
+      "id": "effort-slider",
+      "name": "推理强度滑条",
+      "version": "1.0.0",
+      "description": "把输入框推理强度面板里的档位列表换成分档滑条，档位越高星点越亮越快，最高档流动星云。",
+      "author": "t3-extensions",
+      "locales": {
+        "en": {
+          "name": "Effort slider",
+          "description": "Replaces the reasoning effort list in the composer with a stepped slider; higher levels make the stars brighter and faster, and the top level adds a flowing nebula."
+        }
+      },
+      "manifest": "../extensions/effort-slider/plugin.json",
+      "sha256": {
+        "plugin.json": "b27f87e1e4b7d3d515ae8a1a0ff30caa3d15c0e9905d676abf8805f5963cd9d6",
+        "web.js": "25b104163c98d6f54d47f4b2c27adcbdb956b25bd48ddf10600bd775269e2848",
+        "styles.css": "1f8c1ee597ffded883830a42fc9daf9c826926936829122cfbc6433e991d355c"
+      }
+    },
+    {
+      "id": "desk-pets",
+      "name": "桌宠",
+      "version": "1.0.0",
+      "description": "输入框上沿站着当前 agent 的像素宠物，跟着会话状态动；子代理各派一只到旁边干活。每个 agent 用哪只、宠物库都能自己改。",
+      "author": "t3-extensions",
+      "locales": {
+        "en": {
+          "name": "Desk pets",
+          "description": "Pixel pets for the current agent stand on the composer and react to the thread state; each subagent sends its own pet to work alongside. Choose a pet per agent and edit the pet library."
+        }
+      },
+      "manifest": "../extensions/desk-pets/plugin.json",
+      "sha256": {
+        "plugin.json": "3ded0c54b1f4aff312225e3019ade7b21e61cce1190e2358b0b6d77422d22da1",
+        "logic.js": "e1e4f57b9ffbd40c0f76338ef9b85bfbc5e70bea09d2a5b79c6fa057d0c27f21",
+        "subpets.js": "fadec556abfca7cff3d39420e8e39b31dccb2f829c59f7e2766a037970ba6698",
+        "controller.js": "24a7db6dd08748c9593725787f97d0347752d75d144c87d362126ad496acee38",
+        "settings.js": "c7126603573bfbcc15431670eca0de34fa781360ddda2b2daae67b9b0eff9e9e",
+        "web.js": "af667bf63a60804c0e4669e13145ca72c56e2f969303c8ea84bcbf7112e83512",
+        "pets.css": "2daf04c1073988c158b2ca15954626ee177d7a0714f7d9c6d7935e98eb1ba0c2",
+        "pets-keyframes.css": "5d4e24aeac8a04d774cfbfa5e38beac37231a74595209694c46ee1c30cb8d4fb",
+        "pets-fx.css": "7951c555a85cd6a58429c89411774de43b85f02d9a57a19a648a22ab2ef09195",
+        "pets-subagents.css": "d79c2414f07957bae9f9903fbb6639b7ffc98ad2c7eca06711c631126f571956",
+        "settings.css": "a84baae069720d56247a211a5793c14f4059bf162ab6db9f54547068aac912f0",
+        "pets/codex/sheet.webp": "496fd6ac1bc6db90382a73f0226e94dad6960774354cca0389ccc70f959f4a1a"
+      }
+    },
+    {
+      "id": "hello-badge",
+      "name": "示例：会话状态角标",
+      "version": "1.0.0",
+      "description": "写扩展的最小示例：右下角显示当前 agent 和会话状态。",
+      "author": "t3-extensions",
+      "locales": {
+        "en": {
+          "name": "Example: thread status badge",
+          "description": "A minimal extension example that shows the current agent and thread state in the bottom-right corner."
+        }
+      },
+      "manifest": "../examples/hello-badge/plugin.json",
+      "sha256": {
+        "plugin.json": "dcb32b66041d111de37f694c006ff2c34a606755bb4a2a9c7444b2a75b98a919",
+        "web.js": "4b4cd365187fb0f80bdebf489cbc7744652731167dbe0cd472633e3f251f8c29",
+        "styles.css": "a2b14628091e1a89b7750acf0778f842d2325f0fde1cc26b8dac74e010b0390d"
+      }
+    }
+  ]
+}
