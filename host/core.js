@@ -222,6 +222,19 @@ function showContextMenu(items, position) {
   return contextMenuModule.then((m) => m.r(items, position));
 }
 
+// T3 的页面结构只在这里出现：T3 改版时改这里，扩展不用跟着改。side chat 里也有一套输入框，不算。
+const MAIN_COMPOSER = '[data-slot="composer-host"]';
+const inSideChat = (el) => !!el.closest("[data-side-chat-pane]");
+const dom = {
+  /** 主聊天视图的输入框外壳，没有时返回 null。 */
+  composer: () => [...document.querySelectorAll(MAIN_COMPOSER)].find((el) => !inSideChat(el)) ?? null,
+  /** target 在主输入框的模型选择器里时返回那个选择器，否则 null。 */
+  modelPicker: (target) => {
+    const picker = target instanceof Element ? target.closest("[data-chat-provider-model-picker]") : null;
+    return picker?.closest(MAIN_COMPOSER) && !inSideChat(picker) ? picker : null;
+  },
+};
+
 // T3 自己的确认框（删除会话用的那个）：以“？”结尾的那行是标题，其余行是说明；返回 true/false。
 const CONFIRM_MODULE = "./toast-DoB9Gbxj.js";
 let confirmModule = null;
@@ -288,6 +301,8 @@ function makeApi(rec, life) {
     },
     openSettings: () => requestSettings(id),
     contextMenu: showContextMenu,
+    confirm: showConfirm,
+    dom,
     storage: {
       get: (key, fallback) => store.get(own(key), fallback),
       set: (key, value) => store.set(own(key), value),

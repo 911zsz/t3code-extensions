@@ -24,8 +24,8 @@ test("plugin.json 校验", () => {
   const ok = { id: "demo", apiVersion: 1, name: "Demo", version: "1.0.0", entries: { web: "web.js" } };
   assert.deepEqual(pure.t3xCheckManifest(ok, { "web.js": "" }).web, ["web.js"]);
   assert.throws(() => pure.t3xCheckManifest({ ...ok, id: "Bad Id" }), /id/);
-  assert.throws(() => pure.t3xCheckManifest({ ...ok, apiVersion: 3 }), /apiVersion/);
-  pure.t3xCheckManifest({ ...ok, apiVersion: 2 }); // 2 用到设置面板的 Input / Select 和 openSettings
+  for (const apiVersion of [0, 4, 2.5, "2"]) assert.throws(() => pure.t3xCheckManifest({ ...ok, apiVersion }), /apiVersion/, String(apiVersion));
+  for (const apiVersion of [2, 3]) pure.t3xCheckManifest({ ...ok, apiVersion }, { "web.js": "" }); // 2 加了 Input / Select、openSettings、contextMenu；3 加了 dom、confirm
   assert.throws(() => pure.t3xCheckManifest({ ...ok, entries: { web: "../x.js" } }), /路径/);
   assert.throws(() => pure.t3xCheckManifest({ ...ok, entries: { web: ["a.js", "a.js"] } }), /两次/);
   assert.deepEqual(pure.t3xCheckManifest({ ...ok, locales: { en: { name: "Demo", description: "d" } } }, { "web.js": "" }).web, ["web.js"]);
@@ -275,6 +275,35 @@ test("确认框是异步的：标题不被换行拆坏，确认期间扩展被�
   const confirmed = { state: "available", item: rec("2.0.0"), rec: records.get("demo") };
   updates.set("demo", { ...confirmed }); // 确认期间又刷新过一次
   await assert.rejects(applyUpdate("demo", confirmed), /重新检查/);
+});
+
+test("host.dom：只认主输入框和它的模型选择器，不认 side chat", () => {
+  const { hostSource } = require("../lib/build.cjs");
+  class El {
+    constructor(attrs, parent = null) {
+      Object.assign(this, { attrs, parent });
+    }
+    closest(sel) {
+      for (let e = this; e; e = e.parent) if (e.attrs.includes(sel)) return e;
+      return null;
+    }
+  }
+  const HOST = '[data-slot="composer-host"]';
+  const PICKER = "[data-chat-provider-model-picker]";
+  const sideHost = new El([HOST], new El(["[data-side-chat-pane]"]));
+  const mainHost = new El([HOST]);
+  const mainPicker = new El([PICKER], mainHost);
+  const document = { querySelectorAll: (sel) => (sel === HOST ? [sideHost, mainHost] : []) };
+  const ctx = vm.createContext({ bind: { React: { Component: class {} }, jsx: {}, choices: () => [] }, Element: El, document, console, URL, TextDecoder, TextEncoder });
+  vm.runInContext(`${hostSource()}\nthis.api = { dom };`, ctx);
+  const { dom } = ctx.api;
+  assert.equal(dom.composer(), mainHost);
+  assert.equal(dom.modelPicker(new El(["span"], mainPicker)), mainPicker);
+  assert.equal(dom.modelPicker(new El([PICKER], sideHost)), null, "side chat 里的模型选择器不算");
+  assert.equal(dom.modelPicker(new El([PICKER])), null, "不在输入框里的不算");
+  assert.equal(dom.modelPicker(null), null);
+  document.querySelectorAll = () => [sideHost];
+  assert.equal(dom.composer(), null);
 });
 
 test("zip 解包：存储和 deflate、外壳目录、大小上限", async () => {

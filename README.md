@@ -75,7 +75,7 @@ my-ext/
 }
 ```
 
-`apiVersion`：用到设置面板的 `Input` / `Select` 系列、`host.openSettings()` 或 `host.contextMenu()` 时写 `2`，旧版宿主会拒绝安装；只用其余接口写 `1`。
+`apiVersion`：用到 `host.dom` 或 `host.confirm()` 写 `3`；用到设置面板的 `Input` / `Select` 系列、`host.openSettings()` 或 `host.contextMenu()` 写 `2`；只用其余接口写 `1`。宿主会拒绝安装 apiVersion 比自己新的扩展。
 
 `repository` 可选：扩展的 GitHub 仓库，卡片上的“详情”链接到这里。
 
@@ -95,6 +95,8 @@ my-ext/
 | `host.style(css)` | 追加样式，停用时自动移除 |
 | `host.openSettings()` | 跳到 设置 → 扩展，打开本扩展的设置 |
 | `host.contextMenu(items, { x, y })` | 弹出 T3 样式的右键菜单，返回选中项的 `id`（没选是 `null`）。项：`{ id, label, detail?, icon?, checked?, disabled?, separatorBefore?, children? }`，`icon` 只能用 T3 内置的几个名字（如 `settings`） |
+| `host.confirm(message, { variant? })` | 弹出 T3 自己的确认框，返回 `Promise<boolean>`（用 `if (await host.confirm(…))`）。`message` 里以问号结尾的那行是标题，其余行是说明；`variant: "destructive"` 时确认按钮是红色 |
+| `host.dom.composer()`、`host.dom.modelPicker(target)` | 主聊天视图的输入框外壳；`target` 在主输入框的模型选择器里时返回那个选择器（side chat 里的都不算），否则 `null`。需要找 T3 页面元素时用这里，别自己查 T3 的 DOM：T3 改版时宿主跟着改，扩展不用动 |
 | `host.chat.last()` | 最近一次聊天视图的会话状态（设置页里也能拿到 provider 列表） |
 | `host.lang()`、`host.useLang()` | 当前界面语言：T3 是中文时为 `"zh"`，其他语言都是 `"en"`。`useLang` 是 React hook，切语言时触发重绘 |
 | `host.t(中文, 英文)` | 按当前界面语言二选一；在渲染时调用，组件里先调一次 `host.useLang()` |

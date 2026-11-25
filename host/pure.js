@@ -4,9 +4,9 @@
 const isZh = () => typeof document === "undefined" || /^zh\b/i.test(document.documentElement.lang);
 const L = (zh, en) => (isZh() ? zh : en);
 
-// 2：设置面板的 ui 加了 Input / Select 系列，host 加了 openSettings、contextMenu。apiVersion 1 的扩展照常能用；
-// 用到新接口的扩展声明 2，旧宿主会拒绝安装，而不是装上后设置面板出错。
-const API_VERSION = 2;
+// 2：设置面板的 ui 加了 Input / Select 系列，host 加了 openSettings、contextMenu。3：host 加了 dom、confirm。
+// 旧 apiVersion 的扩展照常能用；用到新接口的扩展声明新值，旧宿主会拒绝安装，而不是装上后出错。
+const API_VERSION = 3;
 const REGISTRY_VERSION = 1; // 注册表格式没变
 const TAG = "[t3x]";
 // add：所有扩展的组件都渲染；replace：最后启用的那个替换原生组件。
@@ -31,7 +31,7 @@ function t3xCheckManifest(manifest, files) {
   };
   if (!manifest || typeof manifest !== "object") fail(L("不是 JSON 对象", "Expected a JSON object"));
   if (typeof manifest.id !== "string" || !ID_RE.test(manifest.id)) fail(L("id 只能用小写字母、数字、点和连字符", "id may contain only lowercase letters, digits, periods, and hyphens"));
-  if (manifest.apiVersion !== 1 && manifest.apiVersion !== API_VERSION) fail(L(`apiVersion 需要是 1 或 ${API_VERSION}，请升级 T3 Code Extensions`, `apiVersion must be 1 or ${API_VERSION}. Update T3 Code Extensions.`));
+  if (!Number.isInteger(manifest.apiVersion) || manifest.apiVersion < 1 || manifest.apiVersion > API_VERSION) fail(L(`apiVersion 需要是 1 到 ${API_VERSION}，请升级 T3 Code Extensions`, `apiVersion must be 1 to ${API_VERSION}. Update T3 Code Extensions.`));
   if (typeof manifest.name !== "string" || !manifest.name.trim() || manifest.name.length > 60) fail(L("name 必填，最多 60 字", "name is required and must be at most 60 characters"));
   if (typeof manifest.version !== "string" || !/^\d+\.\d+\.\d+/.test(manifest.version)) fail(L("version 需要是 x.y.z", "version must have the form x.y.z"));
   // 这些字段会直接显示在设置页：类型不对（比如对象）会让整个扩展区块渲染失败，入库前就拦下。
