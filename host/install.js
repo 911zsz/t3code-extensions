@@ -80,7 +80,7 @@ async function fetchExtension(manifestUrl, hashes) {
     await check(p, bytes);
     return bytes;
   };
-  for (const p of [...list.web, ...list.styles]) files[p] = new TextDecoder().decode(await get(p));
+  for (const p of [...list.web, ...list.styles, ...list.server]) files[p] = new TextDecoder().decode(await get(p));
   for (const p of list.assets) files[p] = await bytesToDataUrl(await get(p), mimeOf(p));
   t3xCheckManifest(manifest, files);
   return { manifest, files, source: { kind: hashes ? "registry" : "url", url: base.href } };
@@ -95,7 +95,7 @@ async function packLocal(read, source) {
   const manifest = JSON.parse(manifestText);
   const list = t3xCheckManifest(manifest);
   const files = { "plugin.json": manifestText };
-  for (const p of [...list.web, ...list.styles]) {
+  for (const p of [...list.web, ...list.styles, ...list.server]) {
     const bytes = await read(p);
     files[p] = bytes && new TextDecoder().decode(bytes);
   }
@@ -166,8 +166,9 @@ async function pickLocalFolder() {
 /** 本地扩展能不能重新加载：装的时候记住了文件夹。 */
 const canReload = (rec) => rec.source?.kind === "local" && !!rec.source.handle;
 
-/** 重新读同一个文件夹并替换（同一个文件夹是用户自己选的，不再弹安装确认）。必须在点击事件里调用：可能要重新申请读权限。 */
-async function reloadLocal(rec) {
+/** 重新读同一个文件夹并替换（同一个文件夹是用户自己选的，不再弹安装确认；新加了后台代码时例外，交给 confirm）。
+ *  必须在点击事件里调用：可能要重新申请读权限。返回是否替换了。 */
+async function reloadLocal(rec, confirm) {
   const dir = rec.source.handle;
   if ((await dir.queryPermission?.({ mode: "read" })) !== "granted" && (await dir.requestPermission?.({ mode: "read" })) !== "granted") {
     throw new Error(L(`没有读取文件夹 ${dir.name} 的权限`, `No permission to read the folder ${dir.name}`));
@@ -178,7 +179,9 @@ async function reloadLocal(rec) {
   if (item.manifest.id !== rec.manifest.id) {
     throw new Error(L(`文件夹里的扩展 id 变成了“${item.manifest.id}”，没有替换“${rec.manifest.id}”`, `The folder now contains “${item.manifest.id}”, so “${rec.manifest.id}” wasn’t replaced.`));
   }
+  if (hasServer(item) && !hasServer(rec) && !(await confirm(item))) return false;
   await install(item);
+  return true;
 }
 
 /** 上传的 zip：根目录（或唯一的外层目录）里要有 plugin.json。 */
@@ -268,6 +271,7 @@ async function uninstall(id) {
   if (!rec) return;
   if (!ready) throw new Error(L("扩展还在载入，稍后再试", "Extensions are still loading. Try again in a moment."));
   deactivate(rec);
+  serverKeep.add(id);
   records.delete(id);
   bump();
   const { [id]: _drop, ...rest } = store.get("t3x:enabled", {});
@@ -279,6 +283,8 @@ async function uninstall(id) {
   ];
   for (const key of [...cache.keys()]) if (key.startsWith(`ext:${id}:`)) writes.push(store.set(key, undefined));
   await Promise.all(writes);
+  serverKeep.delete(id); // 卸载写盘成功了，主进程这才删它的后台数据；写盘失败就留着
+  queueServerSync();
 }
 
 function boot() {

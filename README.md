@@ -80,7 +80,7 @@ my-ext/
 }
 ```
 
-`apiVersion`：用到 `host.dom` 或 `host.confirm()` 写 `3`；用到设置面板的 `Input` / `Select` 系列、`host.openSettings()` 或 `host.contextMenu()` 写 `2`；只用其余接口写 `1`。宿主会拒绝安装 apiVersion 比自己新的扩展。
+`apiVersion`：带后台脚本（`entries.server`）写 `4`；用到 `host.dom` 或 `host.confirm()` 写 `3`；用到设置面板的 `Input` / `Select` 系列、`host.openSettings()` 或 `host.contextMenu()` 写 `2`；只用其余接口写 `1`。宿主会拒绝安装 apiVersion 比自己新的扩展。
 
 `repository` 可选：扩展的 GitHub 仓库，卡片上的“详情”链接到这里。
 
@@ -111,10 +111,34 @@ my-ext/
 
 | slot | 方式 | 组件收到的 props |
 |---|---|---|
-| `chat.overlay` | 所有扩展都渲染 | `threadKey`、`awaiting`（`"approval"`/`"input"`/`null`）、`working`、`error`、`runStatus`、`providerInstanceId`、`driver`、`providers`、`model`、`subagents`、`embedded`（side chat 里为真） |
+| `chat.overlay` | 所有扩展都渲染 | `threadKey`、`awaiting`（`"approval"`/`"input"`/`null`）、`working`、`error`、`runStatus`、`providerInstanceId`、`driver`、`providers`、`model`、`subagents`、`context`（上下文用量：`usedTokens`、`maxTokens`、`usedPercentage`、`autoCompactThreshold`，没有时为 `null`）、`compacting`（正在压缩历史）、`embedded`（side chat 里为真） |
 | `composer.effort` | 最后启用的替换原生档位列表 | `label`、`steps[{id,label,description,isDefault}]`、`activeIndex`、`defaultIndex`、`disabled`、`select(index)` |
 
 扩展组件出错只影响它自己：overlay 不渲染，`composer.effort` 退回原生列表，错误显示在扩展那一行。颜色请用 T3 的主题变量（`var(--foreground)`、`var(--muted-foreground)`、`var(--border)` 等），`html.dark` 是暗色模式。
+
+### 后台扩展
+
+`entries.server` 指向一个 `.mjs` 文件时，它会在 T3 后台（Node）里运行，以你的用户权限读写文件、运行程序；清单要声明 `"apiVersion": 4` 和 `"permissions": ["server"]`，安装确认框和卡片上会标出“后台”。后台脚本是单个 ES 模块（不能 import 扩展包里的其他文件），导出 `activate(t3x)`，可以返回停用时调用的清理函数。停用后再启用同一版本时，`activate` 会在同一个模块实例上再调用一次（模块顶层状态还在），10 秒内没激活完算加载失败：
+
+```js
+export function activate(t3x) {
+  t3x.usage.registerSource({
+    driver: "antigravity",
+    read: async (ctx) => ({ windows: [{ id: "weekly", label: "Weekly", kind: "weekly", usedPercent: 12.5, resetsAt: "2026-12-01T00:00:00Z", windowDurationMins: 10080 }] }),
+  });
+}
+```
+
+| `t3x` | 说明 |
+|---|---|
+| `id`、`version` | 扩展的 id 和版本 |
+| `dataDir` | 扩展自己的数据目录（不保证已存在）；卸载扩展时整个删掉，停用和升级时保留 |
+| `log(...args)` | 写进 T3 后台日志 |
+| `usage.registerSource({ driver, read })` | 接手某个 provider 的额度读取，目前只支持 `antigravity`。接手后 T3 不再用自己的方式读：读取出错、或者启用的后台扩展没加载起来，面板都显示原因，不会退回 T3 自己的读取；`read(ctx)` 的结果显示在 T3 原生的额度面板里。`ctx`：`instanceId`、`profileDirectory`（T3 给这个实例的配置目录）、`authMethod`、`executablePath`（T3 解析出的 CLI 路径）、`environment`。返回 `{ windows: [{ id, label, kind: "session"/"weekly"/"monthly"/"other", usedPercent, resetsAt?, windowDurationMins? }] }`，出错就抛（消息显示在面板里），60 秒没结果算失败。同一个 provider 只能由一个扩展接手 |
+
+启用、停用、升级后台扩展时，窗口把代码交给 Electron 主进程，写到 `<T3 数据目录>/t3x-server/`，T3 后台发现变化后重新加载（不用重启）。只有本应用启动的 T3 后台会加载它们：用官方 T3 Code 打开同一份数据时，后台扩展不运行，T3 照常用自己的方式读额度。
+
+后台权限不是界面扩展的“上限”：界面扩展和宿主同在 T3 的窗口里，本来就能调用 T3 自己的接口（包括开终端、往终端里输入），一样能以你的权限运行程序。确认框里的“后台”提示是说明它会做什么，不是隔离。
 
 ## 发布扩展
 
@@ -158,7 +182,8 @@ SHA-256 只保证下载到的就是注册表写的那份，**不代表代码安�
 
 ## 原理与限制
 
-- 补丁只开三个口子：聊天视图把会话状态交给 `chat.overlay`；推理档位列表交给 `composer.effort`；设置里加一个“扩展”页（路由表、导航分组和名字、导航图标各改一处，页面组件追加在外观设置页模块里，顶部沿用 T3 的项目/环境作用域选择）。宿主运行时追加在 T3 的 `ThreadRouteView` 模块末尾（聊天视图所在，`_chat` 静态导入它；见 `lib/patch.cjs`、`host/`）。
+- 界面补丁只开三个口子：聊天视图把会话状态交给 `chat.overlay`；推理档位列表交给 `composer.effort`；设置里加一个“扩展”页（路由表、导航分组和名字、导航图标各改一处，页面组件追加在外观设置页模块里，顶部沿用 T3 的项目/环境作用域选择）。宿主运行时追加在 T3 的 `ThreadRouteView` 模块末尾（聊天视图所在，`_chat` 静态导入它；见 `lib/patch.cjs`、`host/`）。
+- 后台扩展另有三处补丁（`lib/patch-server.cjs`）：preload 给主窗口一个只能领一次的同步入口（宿主先领走，界面扩展拿不到）；主进程校验并落盘后台脚本；T3 后台加载它们，并在创建 Antigravity 额度读取时先问有没有扩展接手。
 - 界面语言跟着 T3：T3 的原文是英文，中文由它的翻译函数在渲染时查表。导航和搜索里的“Extensions / 扩展”靠在这个翻译函数入口补了一处；扩展页和扩展自己按 `<html lang>` 选中文或英文，其他语言显示英文。
 - 依赖 0.1.12 压缩代码里的变量名，T3 一更新就要重新适配（扩展不用改，只改这个仓库）；补丁前会核对原始文件哈希，对不上直接拒绝安装，不会装出一个坏掉的应用。
 - 本机 ad-hoc 签名，没有官方签名和公证，也没有 Hardened Runtime：官方的 entitlements 依赖官方描述文件，ad-hoc 签名带上它们反而启动不了。

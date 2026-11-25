@@ -8,6 +8,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { readAsar, findOne, writeAsar, checkModuleSyntax, sha256 } = require("./lib/asar.cjs");
 const { T3_VERSION, PROFILE_NAME, chatPatch, appearancePatch, routePatch, navPatch, navIconPatch, i18nPatch, userDataPatch } = require("./lib/patch.cjs");
+const { preloadPatch, mainServerPatch, serverPatch } = require("./lib/patch-server.cjs");
 
 const DEFAULT_SOURCE = "/Applications/T3 Code (Beta).app";
 const T3_TEAM_ID = "ARK85ZXQ4Z";
@@ -20,8 +21,8 @@ const INSTALL_DIR = path.join(APPS_DIR, `${APP_NAME}.app`);
 const PROFILE_DIR = path.join(os.homedir(), "Library", "Application Support", PROFILE_NAME);
 const ISOLATED_PORT = "3775";
 
-const UI_PATCHES = [chatPatch, appearancePatch, routePatch, navPatch, navIconPatch, i18nPatch];
-const patchesFor = (isolated) => (isolated ? [...UI_PATCHES, userDataPatch] : UI_PATCHES);
+const PATCHES = [chatPatch, appearancePatch, routePatch, navPatch, navIconPatch, i18nPatch, preloadPatch, mainServerPatch, serverPatch];
+const patchesFor = (isolated) => (isolated ? [...PATCHES, userDataPatch] : PATCHES);
 
 function plist(app, key, format = "raw") {
   const out = execFileSync("plutil", ["-extract", key, format, "-o", "-", path.join(app, INFO_PLIST)], { encoding: "utf8" });
@@ -50,16 +51,20 @@ function isRunning() {
   }
 }
 
-/** 给 asar 打补丁写到 outFile；每个目标文件先核对 T3_VERSION 的原始哈希。返回头部哈希。 */
+/** 给 asar 打补丁写到 outFile；每个目标文件先核对 T3_VERSION 的原始哈希，同一个文件的几个补丁依次打上。返回头部哈希。 */
 function patchArchive(asarFile, patches, outFile) {
   const asar = readAsar(asarFile);
-  const replacements = new Map();
+  const byKey = new Map();
   for (const p of patches) {
     const key = findOne(asar, p.targetRegex, p.label);
+    byKey.set(key, [...(byKey.get(key) ?? []), p]);
+  }
+  const replacements = new Map();
+  for (const [key, list] of byKey) {
     const original = asar.read(key);
-    assert.equal(sha256(original), p.originalHash, `${key} 和 T3 Code ${T3_VERSION} 不一致`);
-    const patched = Buffer.from(p.apply(original.toString("utf8")), "utf8");
-    checkModuleSyntax(patched, key, p.module === "commonjs" ? ".cjs" : ".mjs");
+    for (const p of list) assert.equal(sha256(original), p.originalHash, `${key} 和 T3 Code ${T3_VERSION} 不一致`);
+    const patched = Buffer.from(list.reduce((text, p) => p.apply(text), original.toString("utf8")), "utf8");
+    checkModuleSyntax(patched, key, list[0].module === "commonjs" ? ".cjs" : ".mjs");
     replacements.set(key, patched);
   }
   return writeAsar(asar, replacements, outFile);

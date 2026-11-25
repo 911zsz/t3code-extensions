@@ -91,6 +91,7 @@ let runSeq = 0;
 function bump() {
   hostVersion += 1;
   for (const fn of hostWatchers) fn(hostVersion);
+  queueServerSync(); // 装卸、启停都会走到这里；后台扩展集合没变时什么都不做
 }
 
 function subscribeHost(fn) {
@@ -344,9 +345,12 @@ function activate(rec) {
   try {
     const list = t3xCheckManifest(rec.manifest, rec.files);
     for (const p of list.styles) life.disposers.push(addStyle(rec.files[p], rec.manifest.id));
-    const run = compile(rec.manifest.id, list.web.map((p) => rec.files[p]).join("\n;\n"));
-    const cleanup = run(makeApi(rec, life));
-    if (typeof cleanup === "function") life.disposers.push(cleanup);
+    // 只有后台脚本的扩展在窗口里没有代码要跑；后台那份由 background.js 交给 T3 后台。
+    if (list.web.length) {
+      const run = compile(rec.manifest.id, list.web.map((p) => rec.files[p]).join("\n;\n"));
+      const cleanup = run(makeApi(rec, life));
+      if (typeof cleanup === "function") life.disposers.push(cleanup);
+    }
     rec.status = "on";
   } catch (error) {
     deactivate(rec);

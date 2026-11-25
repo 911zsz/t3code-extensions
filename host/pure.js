@@ -5,8 +5,10 @@ const isZh = () => typeof document === "undefined" || /^zh\b/i.test(document.doc
 const L = (zh, en) => (isZh() ? zh : en);
 
 // 2：设置面板的 ui 加了 Input / Select 系列，host 加了 openSettings、contextMenu。3：host 加了 dom、confirm。
+// 4：entries.server，后台扩展（在 T3 后台以用户权限运行，要声明 permissions: ["server"]）。
 // 旧 apiVersion 的扩展照常能用；用到新接口的扩展声明新值，旧宿主会拒绝安装，而不是装上后出错。
-const API_VERSION = 3;
+const API_VERSION = 4;
+const SERVER_API_VERSION = 4;
 const REGISTRY_VERSION = 1; // 注册表格式没变
 const TAG = "[t3x]";
 // add：所有扩展的组件都渲染；replace：最后启用的那个替换原生组件。
@@ -14,12 +16,14 @@ const SLOTS = { "chat.overlay": "add", "composer.effort": "replace" };
 const ID_RE = /^[a-z0-9][a-z0-9.-]{1,63}$/;
 const PATH_RE = /^(?!\/)(?!.*\.\.)[\w./-]+$/;
 
-/** 扩展声明的文件，按 web 脚本、样式、二进制素材分组。 */
+/** 扩展声明的文件，按 web 脚本、样式、后台脚本、二进制素材分组。 */
 function t3xEntryList(manifest) {
   const web = manifest.entries?.web;
+  const server = manifest.entries?.server;
   return {
     web: web === undefined ? [] : Array.isArray(web) ? web : [web],
     styles: manifest.entries?.styles ?? [],
+    server: server === undefined ? [] : [server],
     assets: manifest.assets ?? [],
   };
 }
@@ -52,9 +56,15 @@ function t3xCheckManifest(manifest, files) {
   if (web !== undefined && typeof web !== "string" && !strings(web)) fail(L("entries.web 需要是字符串或字符串数组", "entries.web must be a string or an array of strings"));
   if (manifest.entries?.styles !== undefined && !strings(manifest.entries.styles)) fail(L("entries.styles 需要是字符串数组", "entries.styles must be an array of strings"));
   if (manifest.assets !== undefined && !strings(manifest.assets)) fail(L("assets 需要是字符串数组", "assets must be an array of strings"));
+  const server = manifest.entries?.server;
+  if (server !== undefined) {
+    if (typeof server !== "string" || !server.endsWith(".mjs")) fail(L("entries.server 需要是一个 .mjs 文件", "entries.server must be a single .mjs file"));
+    if (manifest.apiVersion < SERVER_API_VERSION) fail(L(`后台扩展需要 apiVersion ${SERVER_API_VERSION}`, `Background extensions need apiVersion ${SERVER_API_VERSION}`));
+    if (!manifest.permissions?.includes("server")) fail(L('后台扩展要在 permissions 里声明 "server"', 'Background extensions must declare "server" in permissions'));
+  }
   const list = t3xEntryList(manifest);
-  const all = [...list.web, ...list.styles, ...list.assets];
-  if (list.web.length === 0) fail(L("entries.web 至少要有一个脚本", "entries.web must list at least one script"));
+  const all = [...list.web, ...list.styles, ...list.server, ...list.assets];
+  if (list.web.length === 0 && list.server.length === 0) fail(L("entries.web 至少要有一个脚本", "entries.web must list at least one script"));
   if (all.length > MAX_FILES) fail(L(`声明的文件超过 ${MAX_FILES} 个`, `More than ${MAX_FILES} files are declared`));
   if (new Set(all).size !== all.length) fail(L("同一个文件声明了两次", "The same file is declared twice"));
   for (const p of all) {
@@ -293,4 +303,4 @@ async function t3xUnzip(bytes, { maxFile = 5 << 20, maxTotal = 20 << 20, maxEntr
 }
 
 // @node-only
-if (typeof module === "object") module.exports = { t3xScopeKeys, t3xEnabledAt, t3xLocalesError, t3xEntryList, t3xCheckManifest, t3xCheckRegistry, t3xEffortModel, t3xParseGithub, t3xRawUrl, t3xUnzip, GITHUB_TOPIC, SLOTS, API_VERSION };
+if (typeof module === "object") module.exports = { t3xScopeKeys, t3xEnabledAt, t3xLocalesError, t3xEntryList, t3xCheckManifest, t3xCheckRegistry, t3xEffortModel, t3xParseGithub, t3xRawUrl, t3xUnzip, GITHUB_TOPIC, SLOTS, API_VERSION, SERVER_API_VERSION };

@@ -24,8 +24,8 @@ test("plugin.json 校验", () => {
   const ok = { id: "demo", apiVersion: 1, name: "Demo", version: "1.0.0", entries: { web: "web.js" } };
   assert.deepEqual(pure.t3xCheckManifest(ok, { "web.js": "" }).web, ["web.js"]);
   assert.throws(() => pure.t3xCheckManifest({ ...ok, id: "Bad Id" }), /id/);
-  for (const apiVersion of [0, 4, 2.5, "2"]) assert.throws(() => pure.t3xCheckManifest({ ...ok, apiVersion }), /apiVersion/, String(apiVersion));
-  for (const apiVersion of [2, 3]) pure.t3xCheckManifest({ ...ok, apiVersion }, { "web.js": "" }); // 2 加了 Input / Select、openSettings、contextMenu；3 加了 dom、confirm
+  for (const apiVersion of [0, 5, 2.5, "2"]) assert.throws(() => pure.t3xCheckManifest({ ...ok, apiVersion }), /apiVersion/, String(apiVersion));
+  for (const apiVersion of [2, 3, 4]) pure.t3xCheckManifest({ ...ok, apiVersion }, { "web.js": "" }); // 2 加了 Input / Select、openSettings、contextMenu；3 加了 dom、confirm；4 加了后台扩展
   assert.throws(() => pure.t3xCheckManifest({ ...ok, entries: { web: "../x.js" } }), /路径/);
   assert.throws(() => pure.t3xCheckManifest({ ...ok, entries: { web: ["a.js", "a.js"] } }), /两次/);
   assert.deepEqual(pure.t3xCheckManifest({ ...ok, locales: { en: { name: "Demo", description: "d" } } }, { "web.js": "" }).web, ["web.js"]);
@@ -220,6 +220,16 @@ if (officialVersion === T3_VERSION) {
       const field = (k) => new RegExp(`(?:^|,)${k}:(.*?)(?=,[a-zA-Z]+:|$)`).exec(state)?.[1];
       assert.equal(field("working"), /isWorking:([\w$]+),runlessWorkActive:/.exec(chatSrc)?.[1], "working 要和原生时间线的 isWorking 是同一个变量");
       assert.equal(field("awaiting"), /awaitingUser:(.*?),awaitingRequestId:/.exec(chatSrc)?.[1], "awaiting 要照抄原生时间线的 awaitingUser");
+      assert.equal(field("compacting"), /isCompacting:([\w$]+),awaitingUser:/.exec(chatSrc)?.[1], "compacting 要是原生时间线的 isCompacting");
+      assert.equal(field("context"), /sources:[^,]+,contextWindow:([\w$]+)\}\}\)/.exec(chatSrc)?.[1], "context 要是输入框 Context 一栏用的 contextWindow");
+      // 后台补丁包住 Antigravity 的 usage.probe：用到的 Effect 函数要是这个模块按这些名字导入的，局部变量要在 driver 里先声明
+      const { serverPatch } = require("../lib/patch-server.cjs");
+      const serverSrc = before.read(findOne(before, serverPatch.targetRegex, serverPatch.label)).toString("utf8");
+      const effectNames = [...serverSrc.matchAll(/import \{([^}]*)\} from "\.\/Schema-[\w-]+\.mjs"/g)].flatMap((m) => m[1].split(",").map((x) => x.trim().split(" as ").pop()));
+      for (const n of ["gen", "promise", "option"]) assert(effectNames.includes(n), `T3 后台模块没有从 Effect 导入 ${n}`);
+      const driver = serverSrc.slice(serverSrc.indexOf("const installation = yield* AntigravityInstallation;"), serverSrc.indexOf("const provider = yield* makeAntigravityProvider(settings, {"));
+      assert(driver.length > 0 && driver.length < 20000, "Antigravity driver 的范围变了");
+      for (const decl of ["const usage = yield* makeAntigravityUsageProbe({", "installation.resolve(settings.binaryPath, processEnvironment)", "auth.authMethod"]) assert(driver.includes(decl), `Antigravity driver 里没有 ${decl}`);
       // 宿主运行时绑定的 React / jsx / 档位选项函数，要是这个模块顶层真有的名字（未声明的名字到启动时才报 ReferenceError）
       const bind = /\}\)\(\{React:([\w$]+),jsx:([\w$]+),choices:([\w$]+)\}/.exec(runtime());
       assert(bind, "找不到宿主运行时的 bind");
@@ -400,6 +410,8 @@ test("zip 解包：存储和 deflate、外壳目录、大小上限", async () =>
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+require("./server-tests.cjs")(test);
 
 (async () => {
   for (const [name, fn] of queue) {

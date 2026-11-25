@@ -24,7 +24,10 @@ async function consent(item) {
     L(`安装“${name}” ${version}？`, `Install “${name}” ${version}?`) +
       L(`\n来源：${oneLine(sourceText(item.source))}`, `\nSource: ${oneLine(sourceText(item.source))}`) +
       replace +
-      L("\n扩展在 T3 Code 里运行，可以读取会话内容。", "\nExtensions run inside T3 Code and can read your threads."),
+      L("\n扩展在 T3 Code 里运行，可以读取会话内容。", "\nExtensions run inside T3 Code and can read your threads.") +
+      (hasServer(item)
+        ? L("\n它还带后台代码：会在 T3 后台以你的用户权限运行，能读写文件、运行程序。只安装你信任的扩展。", "\nIt also has background code that runs in the T3 backend with your user permissions and can read and write files and run programs. Install it only if you trust it.")
+        : ""),
   );
   if (ok && records.get(manifest.id) !== before) throw changedWhileConfirming();
   return ok;
@@ -111,10 +114,10 @@ function ExtensionCard({ ui, rec, scopeKeys, onOpenSettings, onMessage }) {
     if (reloading) return;
     setReloading(true);
     // 必须在点击事件里直接调用 reloadLocal：可能需要向浏览器重新申请读取权限。
-    reloadLocal(rec).then(
-      () => {
+    reloadLocal(rec, consent).then(
+      (done) => {
         setReloading(false);
-        onMessage?.({ kind: "ok", text: L(`已重新加载“${name}”`, `Reloaded “${name}”`) });
+        onMessage?.(done ? { kind: "ok", text: L(`已重新加载“${name}”`, `Reloaded “${name}”`) } : { kind: "info", text: L("已取消重新加载", "Reload canceled") });
       },
       (error) => {
         setReloading(false);
@@ -175,6 +178,7 @@ function ExtensionCard({ ui, rec, scopeKeys, onOpenSettings, onMessage }) {
   const isChecking = updateInfo?.state === "checking";
   const canConfigure = state.on && rec.status === "on" && !!rec.settings;
   const showRefreshBtn = reloadable || checkable;
+  const cardError = rec.error ?? serverErrorOf(rec);
 
   return h(
     "article",
@@ -191,6 +195,9 @@ function ExtensionCard({ ui, rec, scopeKeys, onOpenSettings, onMessage }) {
           { className: "t3x-card-title-row" },
           h("h3", { className: "t3x-card-name", title: name }, name),
           h("span", { className: "t3x-ver" }, `v${manifest.version}`),
+          hasServer(rec)
+            ? h(ui.Badge, { variant: "secondary", size: "sm", title: L("带后台代码，在 T3 后台以你的用户权限运行", "Has background code that runs in the T3 backend with your user permissions") }, L("后台", "Background"))
+            : null,
         ),
         h(
           "div",
@@ -212,8 +219,8 @@ function ExtensionCard({ ui, rec, scopeKeys, onOpenSettings, onMessage }) {
       },
       summary || L("暂无简介", "No description"),
     ),
-    // 启用失败是持续的状态，留在卡片上；其余结果走 toast。
-    rec.error ? h(ui.Alert, { variant: "error", className: "t3x-card-alert", title: rec.error }, h(ui.AlertDescription, null, rec.error)) : null,
+    // 启用失败、后台代码出错是持续的状态，留在卡片上；其余结果走 toast。
+    cardError ? h(ui.Alert, { variant: "error", className: "t3x-card-alert", title: cardError }, h(ui.AlertDescription, null, cardError)) : null,
     h(
       "div",
       { className: "t3x-card-foot" },
@@ -494,6 +501,7 @@ function ExtensionsPage({ ui, scope }) {
   useStored("t3x:scoped", {});
   const scopeKeys = t3xScopeKeys(scope);
   const registryUrls = useStored("t3x:registries", []);
+  React.useEffect(refreshServerStatus, []); // 后台扩展的加载结果
 
   const [activeTab, setActiveTabState] = React.useState(lastActiveTab);
   const setActiveTab = React.useCallback((tab) => {
