@@ -1,5 +1,5 @@
 node_modules/
 .DS_Store
 *.asar.patched
-# 自己加的、不想公开的桌宠：local-pets/<id>/pet.json + sheet.webp，构建时并入桌宠扩展
-local-pets/
+# 旧版的本机桌宠素材目录，已不再使用；继续忽略，免得把不公开的素材误提交
+/local-pets/

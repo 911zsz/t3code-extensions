@@ -2,7 +2,7 @@
 
 const h = React.createElement;
 const sourceLabelFor = (kind) =>
-  ({ builtin: L("内置", "Built-in"), registry: L("市场", "Marketplace"), url: L("链接", "Link"), local: L("本地", "Local"), zip: "ZIP", github: "GitHub" })[kind] ?? "";
+  ({ registry: L("市场", "Marketplace"), url: L("链接", "Link"), local: L("本地", "Local"), zip: "ZIP", github: "GitHub" })[kind] ?? "";
 
 function consent(item, verified) {
   const { manifest } = item;
@@ -101,12 +101,12 @@ function CardFallback({ ui, rec }) {
     "article",
     { className: "t3x-card t3x-card-fallback" },
     h("p", { className: "t3x-error" }, L(`${rec.manifest.id}：这张卡片显示不了`, `Couldn’t display the card for ${rec.manifest.id}`)),
-    rec.builtin ? null : h(ui.Button, { size: "xs", variant: "outline", onClick: () => remove(rec.manifest) }, L("移除", "Remove")),
+    h(ui.Button, { size: "xs", variant: "outline", onClick: () => remove(rec.manifest) }, L("移除", "Remove")),
   );
 }
 
-/** Installed / Built-in 共用的扩展卡片。 */
-function ExtensionCard({ ui, rec, scopeKeys, isBuiltInTab, onOpenSettings, onMessage }) {
+/** 已安装页的扩展卡片。 */
+function ExtensionCard({ ui, rec, scopeKeys, onOpenSettings, onMessage }) {
   const { manifest } = rec;
   const id = manifest.id;
   const name = localized(manifest, "name");
@@ -120,7 +120,6 @@ function ExtensionCard({ ui, rec, scopeKeys, isBuiltInTab, onOpenSettings, onMes
   const checkable = canCheckUpdate(rec);
   const [reloading, setReloading] = React.useState(false);
   const [applying, setApplying] = React.useState(false);
-  const [restoring, setRestoring] = React.useState(false);
   const [localStatus, setLocalStatus] = React.useState(null);
 
   React.useEffect(() => {
@@ -129,11 +128,7 @@ function ExtensionCard({ ui, rec, scopeKeys, isBuiltInTab, onOpenSettings, onMes
     return () => clearTimeout(timer);
   }, [localStatus]);
 
-  const sourceTextLabel = rec.builtin
-    ? L("内置", "Built-in")
-    : rec.overridesBuiltin && isBuiltInTab
-      ? L("已更新版本", "Updated")
-      : sourceLabelFor(rec.source?.kind);
+  const sourceTextLabel = sourceLabelFor(rec.source?.kind);
   const statusText =
     rec.status === "error"
       ? L("出错", "Error")
@@ -181,19 +176,6 @@ function ExtensionCard({ ui, rec, scopeKeys, isBuiltInTab, onOpenSettings, onMes
     }
   };
 
-  const handleRestoreBuiltin = async () => {
-    if (restoring) return;
-    setRestoring(true);
-    try {
-      await uninstall(id);
-      onMessage?.({ kind: "ok", text: L(`已将“${name}”恢复为内置版本`, `Restored built-in version of “${name}”`) });
-    } catch (error) {
-      onMessage?.({ kind: "error", text: L(`恢复内置版本失败：${error?.message ?? error}`, `Couldn’t restore built-in version: ${error?.message ?? error}`) });
-    } finally {
-      setRestoring(false);
-    }
-  };
-
   const handleRemove = async () => {
     const res = remove(manifest);
     if (res && typeof res.then === "function") {
@@ -237,9 +219,6 @@ function ExtensionCard({ ui, rec, scopeKeys, isBuiltInTab, onOpenSettings, onMes
           { className: "t3x-card-title-row" },
           h("h3", { className: "t3x-card-name", title: name }, name),
           h("span", { className: "t3x-ver" }, `v${manifest.version}`),
-          rec.overridesBuiltin
-            ? h("span", { className: "t3x-badge t3x-badge-accent", title: L("正在使用仓库更新版本覆盖内置版本", "Using an updated repository version overriding the built-in copy") }, L("已更新", "Override"))
-            : null,
         ),
         h(
           "div",
@@ -358,31 +337,17 @@ function ExtensionCard({ ui, rec, scopeKeys, isBuiltInTab, onOpenSettings, onMes
               L("设置", "Settings"),
             )
           : null,
-        rec.overridesBuiltin
-          ? h(
-              ui.Button,
-              {
-                size: "xs",
-                variant: "ghost",
-                className: "t3x-foot-btn",
-                disabled: restoring,
-                onClick: handleRestoreBuiltin,
-              },
-              restoring ? L("恢复中…", "Restoring…") : L("恢复内置版本", "Restore built-in"),
-            )
-          : !rec.builtin
-            ? h(
-                ui.Button,
-                {
-                  size: "xs",
-                  variant: "ghost",
-                  className: "t3x-foot-btn t3x-btn-danger",
-                  "aria-label": L(`移除 ${name}`, `Remove ${name}`),
-                  onClick: handleRemove,
-                },
-                L("移除", "Remove"),
-              )
-            : null,
+        h(
+          ui.Button,
+          {
+            size: "xs",
+            variant: "ghost",
+            className: "t3x-foot-btn t3x-btn-danger",
+            "aria-label": L(`移除 ${name}`, `Remove ${name}`),
+            onClick: handleRemove,
+          },
+          L("移除", "Remove"),
+        ),
       ),
       h(
         "div",
@@ -409,7 +374,7 @@ function ExtensionCard({ ui, rec, scopeKeys, isBuiltInTab, onOpenSettings, onMes
                 className: "t3x-icon-btn",
                 disabled: reloadable ? reloading : isChecking,
                 "aria-label": reloadable ? L(`重新加载 ${name}`, `Reload ${name}`) : L(`检查 ${name} 更新`, `Check for updates to ${name}`),
-                title: reloadable ? L("重新加载本地插件", "Reload local plugin") : L("检查更新", "Check for updates"),
+                title: reloadable ? L("重新加载本地扩展", "Reload local extension") : L("检查更新", "Check for updates"),
                 onClick: reloadable ? handleReload : handleCheckUpdate,
               },
               t3xIcon("refresh", 13, reloading || isChecking ? "t3x-spin" : ""),
@@ -483,21 +448,19 @@ function MarketCard({ ui, entry, onInstall, busy, installing }) {
       h(
         "div",
         { className: "t3x-card-foot-right" },
-        installed?.builtin
-          ? h("span", { className: "t3x-status-pill" }, L("内置", "Built-in"))
-          : upToDate
-            ? h("span", { className: "t3x-status-pill t3x-status-installed" }, t3xIcon("check", 12), L("已安装", "Installed"))
-            : h(
-                ui.Button,
-                {
-                  size: "xs",
-                  variant: "outline",
-                  disabled: busy,
-                  "aria-label": `${label} ${name}`,
-                  onClick: () => onInstall(entry),
-                },
-                installing ? L("安装中…", "Installing…") : label,
-              ),
+        upToDate
+          ? h("span", { className: "t3x-status-pill t3x-status-installed" }, t3xIcon("check", 12), L("已安装", "Installed"))
+          : h(
+              ui.Button,
+              {
+                size: "xs",
+                variant: "outline",
+                disabled: busy,
+                "aria-label": `${label} ${name}`,
+                onClick: () => onInstall(entry),
+              },
+              installing ? L("安装中…", "Installing…") : label,
+            ),
       ),
     ),
   );
@@ -509,11 +472,7 @@ function ExtensionSettingsView({ ui, rec, onBack }) {
   const name = localized(manifest, "name");
   const summary = localized(manifest, "description");
   const detailsUrl = detailsUrlFor(rec);
-  const sourceTextLabel = rec.builtin
-    ? L("内置", "Built-in")
-    : rec.overridesBuiltin
-      ? L("已更新版本", "Updated")
-      : sourceLabelFor(rec.source?.kind);
+  const sourceTextLabel = sourceLabelFor(rec.source?.kind);
 
   const titleRef = React.useRef(null);
   React.useEffect(() => {
@@ -555,7 +514,7 @@ function ExtensionSettingsView({ ui, rec, onBack }) {
             { className: "t3x-detail-title-row" },
             h("h1", { ref: titleRef, tabIndex: -1, className: "t3x-detail-title" }, name),
             h("span", { className: "t3x-ver" }, `v${manifest.version}`),
-            sourceTextLabel ? h("span", { className: rec.overridesBuiltin ? "t3x-badge t3x-badge-accent" : "t3x-badge" }, sourceTextLabel) : null,
+            sourceTextLabel ? h("span", { className: "t3x-badge" }, sourceTextLabel) : null,
           ),
           summary ? h("p", { className: "t3x-detail-desc" }, summary) : null,
         ),
@@ -599,7 +558,6 @@ function SettingsPage(props) {
 const TABS = [
   { id: "installed", label: () => L("已安装", "Installed") },
   { id: "browse", label: () => L("浏览", "Browse") },
-  { id: "builtin", label: () => L("内置", "Built-in") },
 ];
 
 // 切换顶部作用域时 T3 可能重挂页面组件，记住上次选中的标签页避免跳走。
@@ -638,9 +596,7 @@ function ExtensionsPage({ ui, scope }) {
   const openRequested = React.useCallback(() => {
     const reqId = takeSettingsRequest();
     if (!reqId) return;
-    // 返回时落在这个扩展所在的标签：内置扩展（含被 GitHub 版覆盖的）在“内置”。
-    const req = records.get(reqId);
-    setActiveTab(req?.builtin || req?.overridesBuiltin ? "builtin" : "installed");
+    setActiveTab("installed"); // 返回时落在“已安装”
     setSettingsId(reqId);
   }, [setActiveTab]);
 
@@ -812,26 +768,21 @@ function ExtensionsPage({ ui, scope }) {
   };
 
   const allRecords = [...records.values()];
-  const installedList = allRecords.filter((rec) => !rec.builtin);
-  const builtinList = allRecords.filter((rec) => rec.builtin || rec.overridesBuiltin);
+  const installedList = allRecords;
   const q = searchQuery.trim().toLowerCase();
   const filteredInstalled = installedList.filter((rec) => matchesSearch(rec, q));
-  const filteredBuiltin = builtinList.filter((rec) => matchesSearch(rec, q));
 
   const tabCounts = {
     installed: ready ? installedList.length : null,
     browse: null,
-    builtin: ready ? builtinList.length : null,
   };
 
   const searchPlaceholder =
     activeTab === "browse"
       ? L("搜索社区扩展或已添加的市场…", "Search community extensions or marketplaces…")
-      : activeTab === "builtin"
-        ? L("搜索内置扩展…", "Search built-in extensions…")
-        : L("搜索已安装扩展…", "Search installed extensions…");
+      : L("搜索已安装扩展…", "Search installed extensions…");
 
-  const renderCardGrid = (items, isBuiltInTab) =>
+  const renderCardGrid = (items) =>
     h(
       "div",
       { className: "t3x-grid" },
@@ -843,7 +794,6 @@ function ExtensionsPage({ ui, scope }) {
             ui,
             rec,
             scopeKeys,
-            isBuiltInTab,
             onOpenSettings: (id) => setSettingsId(id),
             onMessage: setMessage,
           }),
@@ -905,7 +855,7 @@ function ExtensionsPage({ ui, scope }) {
       },
     }),
 
-    // 标题行：左标题，右“添加本地插件”与“刷新”
+    // 标题行：左标题，右“添加本地扩展”与“刷新”
     h(
       "header",
       { className: "t3x-header" },
@@ -922,7 +872,7 @@ function ExtensionsPage({ ui, scope }) {
             onClick: handleAddLocal,
           },
           t3xIcon("folder", 13),
-          busyKey === "local" || busyKey === "folder" ? L("导入中…", "Adding…") : L("添加本地插件", "Add local plugin"),
+          busyKey === "local" || busyKey === "folder" ? L("导入中…", "Adding…") : L("添加本地扩展", "Add local extension"),
         ),
         h(
           ui.Button,
@@ -989,7 +939,7 @@ function ExtensionsPage({ ui, scope }) {
       ),
     ),
 
-    // 分段标签：Installed / Browse / Built-in
+    // 分段标签：Installed / Browse
     h(
       "div",
       { className: "t3x-tabs", role: "tablist", "aria-label": L("扩展分类", "Extension tabs") },
@@ -1032,13 +982,13 @@ function ExtensionsPage({ ui, scope }) {
         ? loadingBlock
         : activeTab === "installed"
           ? filteredInstalled.length > 0
-            ? renderCardGrid(filteredInstalled, false)
+            ? renderCardGrid(filteredInstalled)
             : installedList.length === 0
               ? h(
                   "div",
                   { className: "t3x-state t3x-state-empty" },
-                  h("p", { className: "t3x-state-title" }, L("尚未安装第三方扩展", "No installed extensions yet")),
-                  h("p", { className: "t3x-hint" }, L("可以在“浏览”里发现社区扩展、通过链接或 ZIP 安装，或点击右上角添加本地插件。", "Discover community extensions in Browse, install via URL or ZIP, or add a local plugin above.")),
+                  h("p", { className: "t3x-state-title" }, L("尚未安装扩展", "No installed extensions yet")),
+                  h("p", { className: "t3x-hint" }, L("可以在“浏览”里发现社区扩展、通过链接或 ZIP 安装，或点击右上角添加本地扩展。", "Discover community extensions in Browse, install via URL or ZIP, or add a local extension above.")),
                   h(
                     "div",
                     { className: "t3x-state-actions" },
@@ -1052,16 +1002,7 @@ function ExtensionsPage({ ui, scope }) {
                   h("p", { className: "t3x-state-title" }, L(`没有找到与“${searchQuery.trim()}”匹配的已安装扩展`, `No installed extensions match “${searchQuery.trim()}”`)),
                   h("div", { className: "t3x-state-actions" }, h(ui.Button, { size: "xs", variant: "outline", onClick: () => setSearchQuery("") }, L("清空搜索", "Clear search"))),
                 )
-          : activeTab === "builtin"
-            ? filteredBuiltin.length > 0
-              ? renderCardGrid(filteredBuiltin, true)
-              : h(
-                  "div",
-                  { className: "t3x-state t3x-state-empty" },
-                  h("p", { className: "t3x-state-title" }, L(`没有找到与“${searchQuery.trim()}”匹配的内置扩展`, `No built-in extensions match “${searchQuery.trim()}”`)),
-                  h("div", { className: "t3x-state-actions" }, h(ui.Button, { size: "xs", variant: "outline", onClick: () => setSearchQuery("") }, L("清空搜索", "Clear search"))),
-                )
-            : h(
+          : h(
                 "div",
                 { className: "t3x-browse" },
                 // 手动安装入口：GitHub / plugin.json / index.json 链接 + 上传 ZIP

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 "use strict";
-// 自检：纯函数、内置扩展能在宿主的包装里编译并激活、补丁能打到官方 0.1.11 上、asar 写出来能读回、注册表哈希一致。
+// 自检：纯函数、示例扩展能在宿主的包装里编译并激活、补丁能打到官方 0.1.11 上、asar 写出来能读回、注册表哈希一致。
 // 用法：node tests/verify.cjs [官方 T3 Code.app]（没有官方 app 时跳过补丁相关检查）
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -10,7 +10,7 @@ const vm = require("node:vm");
 
 const ROOT = path.join(__dirname, "..");
 const pure = require("../host/pure.js");
-const { builtins, registry, runtime, readExtension, EXAMPLES, MARKER } = require("../lib/build.cjs");
+const { registry, runtime, readExtension, EXAMPLES, MARKER } = require("../lib/build.cjs");
 const { readAsar, findOne, sha256 } = require("../lib/asar.cjs");
 
 // 测试按登记顺序在文件末尾依次执行，支持 async。
@@ -49,13 +49,10 @@ test("注册表校验", () => {
   assert.throws(() => pure.t3xCheckRegistry({ apiVersion: 1, extensions: [{ id: "x1", name: { a: 1 }, manifest: "a", sha256: {} }] }), /条目无效/);
   const reg = registry();
   pure.t3xCheckRegistry(reg);
+  assert.deepEqual(reg.extensions.map((e) => e.id), ["hello-badge"]);
   for (const e of reg.extensions) {
-    // 示例扩展按本仓库文件核对；内置扩展按地址里那个提交核对（用户下载到的就是它）
-    const pin = /\/([0-9a-f]{40})\/plugin\.json$/.exec(e.manifest)?.[1];
-    const dir = pin ? path.join(ROOT, "extensions", e.id) : path.join(ROOT, e.manifest.split("/")[1], e.id);
-    const bytes = (p) => (pin ? require("node:child_process").execFileSync("git", ["-C", dir, "show", `${pin}:${p}`]) : fs.readFileSync(path.join(dir, p)));
-    for (const [p, hash] of Object.entries(e.sha256)) assert.equal(sha256(bytes(p)), hash, `${e.id}/${p}`);
-    assert(!Object.keys(e.sha256).some((p) => p.startsWith("local/")), "注册表不能带本机桌宠");
+    const dir = path.join(ROOT, "registry", path.dirname(e.manifest));
+    for (const [p, hash] of Object.entries(e.sha256)) assert.equal(sha256(fs.readFileSync(path.join(dir, p))), hash, `${e.id}/${p}`);
   }
   const onDisk = path.join(ROOT, "registry", "index.json");
   assert.deepEqual(JSON.parse(fs.readFileSync(onDisk, "utf8")), reg, "registry/index.json 过期，运行 node lib/build.cjs");
@@ -74,19 +71,6 @@ test("推理档位整理", () => {
   b.select(0);
   assert.deepEqual(calls, ["max", false]);
   assert.equal(pure.t3xEffortModel({ control: { kind: "select", descriptor: {} }, traits }, () => []), null);
-});
-
-// 三个内置扩展各自的测试在它们的仓库里（npm test 会一并跑）；这里只管宿主这边并入的本机桌宠素材。
-test("本机桌宠素材：定义清洗后变量一个不少", () => {
-  const pets = require("../extensions/desk-pets/logic.js"); // 放在这里：没初始化 submodule 时先由前面的测试报出提示
-  const dir = path.join(ROOT, "local-pets");
-  const ids = fs.existsSync(dir) ? fs.readdirSync(dir).filter((id) => fs.existsSync(path.join(dir, id, "pet.json"))) : [];
-  for (const id of ids) {
-    const def = JSON.parse(fs.readFileSync(path.join(dir, id, "pet.json"), "utf8"));
-    const clean = pets.cleanPet({ ...def, id, sheet: "data:image/webp;base64,AAAA" });
-    assert.equal(Object.keys(clean.vars).length, Object.keys(def.vars ?? {}).length, id);
-    assert.equal(Object.keys(clean.darkVars).length, Object.keys(def.darkVars ?? {}).length, id);
-  }
 });
 
 // 宿主用 function(host){"use strict"; …} 包住扩展代码；这里在 vm 里做同样的事，并给最少的 DOM 替身。
@@ -109,39 +93,8 @@ function fakeHost(ext, calls) {
   };
 }
 
-function makeFakeUi() {
-  const mk = (name) => Object.assign(function FakeUiComponent() {}, { uiName: name });
-  return {
-    Section: mk("Section"),
-    Row: mk("Row"),
-    Switch: mk("Switch"),
-    Button: mk("Button"),
-    Input: mk("Input"),
-    Select: mk("Select"),
-    SelectTrigger: mk("SelectTrigger"),
-    SelectValue: mk("SelectValue"),
-    SelectPopup: mk("SelectPopup"),
-    SelectItem: mk("SelectItem"),
-  };
-}
-
-function walkTree(node, visit) {
-  if (!node || typeof node !== "object") return;
-  if (Array.isArray(node)) {
-    for (const item of node) walkTree(item, visit);
-    return;
-  }
-  visit(node);
-  if (node.props?.control) walkTree(node.props.control, visit);
-  if (node.props?.headerAction) walkTree(node.props.headerAction, visit);
-  if (node.children) walkTree(node.children, visit);
-}
-
-test("内置扩展和示例扩展在宿主包装里编译并激活", () => {
-  const list = builtins();
-  const ui = makeFakeUi();
-  assert.deepEqual(list.map((b) => b.manifest.id), ["edge-glow", "effort-slider", "desk-pets"]);
-  for (const ext of [...list, ...EXAMPLES.map((id) => readExtension(path.join(ROOT, "examples", id)))]) {
+test("示例扩展在宿主包装里编译并激活", () => {
+  for (const ext of EXAMPLES.map((id) => readExtension(path.join(ROOT, "examples", id)))) {
     const web = pure.t3xCheckManifest(ext.manifest, ext.files).web;
     const code = web.map((p) => ext.files[p]).join("\n;\n");
     const ctx = vm.createContext({
@@ -160,21 +113,8 @@ test("内置扩展和示例扩展在宿主包装里编译并激活", () => {
     assert(calls.some((c) => c[0] === "register"), `${ext.manifest.id} 没有注册挂载点`);
     const settingsCall = calls.find((c) => c[0] === "settings");
     assert(settingsCall, `${ext.manifest.id} 没有设置面板`);
-    // 三个内置扩展的设置面板都能用新版 t3xUi 正常渲染，且不使用原生 <select> 或 checkbox
-    if (["edge-glow", "effort-slider", "desk-pets"].includes(ext.manifest.id)) {
-      const tree = settingsCall[2]({ ui });
-      const used = new Set();
-      walkTree(tree, (n) => {
-        if (typeof n.type === "string") used.add(n.type);
-        else if (n.type?.uiName) used.add(n.type.uiName);
-      });
-      assert(used.has("Section") && used.has("Row") && used.has("Select"), `${ext.manifest.id} 设置面板应使用 Section/Row/Select`);
-      assert(!used.has("select"), `${ext.manifest.id} 设置面板不应使用原生 <select>`);
-    }
     if (cleanup) cleanup();
   }
-  const deskPetsSettings = fs.readFileSync(path.join(ROOT, "extensions/desk-pets/settings.js"), "utf8");
-  assert(!deskPetsSettings.includes("controller.unhide"), "desk-pets/settings.js 不应再调用 controller.unhide()");
 });
 
 test("宿主设置页：无嵌套弹窗、对接 openSettings、appearancePatch 暴露完整 t3xUi", () => {
@@ -245,10 +185,7 @@ if (fs.existsSync(asarFile)) {
   console.log(`- 跳过补丁检查：没有 ${asarFile}`);
 }
 
-test("版本比较、作用域键、按作用域启用", () => {
-  assert.equal(pure.t3xNewer("1.10.0", "1.9.9"), true);
-  assert.equal(pure.t3xNewer("1.0.0", "1.0.0"), false);
-  assert.equal(pure.t3xNewer("0.9.0", "1.0.0"), false);
+test("作用域键、按作用域启用", () => {
   assert.equal(pure.t3xScopeKeys({ search: {} }), null);
   assert.deepEqual(pure.t3xScopeKeys({ search: { machine: "m1" } }), ["env:m1"]);
   const members = [{ environmentId: "m1", projectId: "p1" }, { environmentId: "m2", id: "p2" }, { environmentId: "m1", projectId: "p1" }];

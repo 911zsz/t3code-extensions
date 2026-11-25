@@ -1,9 +1,0 @@
-[submodule "extensions/edge-glow"]
-	path = extensions/edge-glow
-	url = https://github.com/ZiHao256/t3x-edge-glow.git
-[submodule "extensions/effort-slider"]
-	path = extensions/effort-slider
-	url = https://github.com/ZiHao256/t3x-effort-slider.git
-[submodule "extensions/desk-pets"]
-	path = extensions/desk-pets
-	url = https://github.com/ZiHao256/t3x-desk-pets.git

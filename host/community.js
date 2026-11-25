@@ -98,11 +98,9 @@ function formatStars(n) {
 const githubInstalled = (item) =>
   [...records.values()].find(
     (r) =>
-      // 内置扩展的仓库也带 t3code-extension 话题：按清单里的仓库 ID 认出来，算已安装
-      (item.id != null && r.manifest.repositoryId === item.id) ||
-      (r.source?.kind === "github" &&
+      r.source?.kind === "github" &&
       !r.source.path &&
-      (item.id != null ? r.source.repoId === item.id : r.source.owner.toLowerCase() === item.owner.toLowerCase() && r.source.repo.toLowerCase() === item.repo.toLowerCase())),
+      (item.id != null ? r.source.repoId === item.id : r.source.owner.toLowerCase() === item.owner.toLowerCase() && r.source.repo.toLowerCase() === item.repo.toLowerCase()),
   );
 
 function CommunityCard({ ui, item, busy, installing, onInstall }) {
@@ -124,17 +122,14 @@ function CommunityCard({ ui, item, busy, installing, onInstall }) {
           "div",
           { className: "t3x-card-title-row" },
           h("h3", { className: "t3x-card-name", title: item.repo }, item.repo),
-          // 内置扩展自己的仓库（按仓库 ID 认）不算未审核的社区扩展
-          installed && (installed.builtin || installed.overridesBuiltin)
-            ? h("span", { className: "t3x-badge t3x-badge-ok", title: L("T3 Code Extensions 自带的扩展", "Ships with T3 Code Extensions") }, L("内置", "Built-in"))
-            : h(
-                "span",
-                {
-                  className: "t3x-badge t3x-badge-warn",
-                  title: L("社区扩展未经审核，安装时会固定到当前提交", "Community extensions are unreviewed and pinned to the current commit when installed"),
-                },
-                L("未审核", "Unreviewed"),
-              ),
+          h(
+            "span",
+            {
+              className: "t3x-badge t3x-badge-warn",
+              title: L("社区扩展未经审核，安装时会固定到当前提交", "Community extensions are unreviewed and pinned to the current commit when installed"),
+            },
+            L("未审核", "Unreviewed"),
+          ),
         ),
         h(
           "div",

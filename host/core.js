@@ -1,5 +1,5 @@
 // 扩展宿主核心。构建时和 settings.js 一起包进同一个函数，追加到 T3 Code 的 _chat 模块末尾。
-// 作用域里有 bind（T3 自己的 React、jsx 运行时、推理档位选项函数）和 builtins（内置扩展）。
+// 作用域里有 bind（T3 自己的 React、jsx 运行时、推理档位选项函数）。
 
 const { React } = bind;
 
@@ -79,7 +79,7 @@ function useStored(key, fallback) {
 
 // ---------- 扩展记录与挂载点 ----------
 
-const records = new Map(); // id -> { manifest, files, source, builtin, status, error, settings, dispose }
+const records = new Map(); // id -> { manifest, files, source, status, error, settings, dispose }
 const slotEntries = Object.fromEntries(Object.keys(SLOTS).map((s) => [s, []]));
 const hostWatchers = new Set();
 let hostVersion = 0;
@@ -133,7 +133,8 @@ const localized = (manifest, key) => {
 /** 全局开关（设置页作用域为“所有项目、所有环境”时的那个）。 */
 function isEnabled(rec) {
   const flag = store.get("t3x:enabled", {})[rec.manifest.id];
-  return flag ?? ((rec.builtin || rec.overridesBuiltin) && rec.manifest.defaultEnabled !== false);
+  // 安装时都会写 true；没有这个键的只有旧版宿主里“覆盖内置版本”的那份，旧版默认启用它。
+  return flag ?? true;
 }
 
 // 按项目、按环境的开关：t3x:scoped = { 扩展 id: { "proj:环境:项目" | "env:环境": true/false } }。只管启用，扩展自己的设置全局共用。

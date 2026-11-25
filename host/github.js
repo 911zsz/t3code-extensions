@@ -105,23 +105,12 @@ async function checkGithubUpdate(source) {
   return resolved.sha === source.sha ? null : fetchGithubExtension(target, resolved);
 }
 
-/** 内置扩展：到 plugin.json 里 repository 指向的仓库取最新 Release，版本号更新才下载整包。 */
-async function checkRepoUpdate(rec) {
-  const repo = t3xParseGithub(rec.manifest.repository);
-  // 带上内置清单里的仓库 ID：仓库被删后同名重建，resolveGithub 在下载前就会拒绝。
-  const target = { ...repo, ref: null, path: "", repoId: rec.manifest.repositoryId };
-  const resolved = await resolveGithub(target);
-  const remote = JSON.parse(new TextDecoder().decode(await fetchBytes(t3xRawUrl(resolved, resolved.sha, "plugin.json"), LIMITS.index)));
-  if (!t3xNewer(remote?.version, rec.manifest.version)) return null;
-  return fetchGithubExtension(target, resolved);
-}
-
-/** 这个扩展能不能检查更新：GitHub 来源，或者带 repository 的内置扩展。 */
-const canCheckUpdate = (rec) => rec.source?.kind === "github" || (rec.builtin && !!rec.manifest.repository && Number.isSafeInteger(rec.manifest.repositoryId));
+/** 这个扩展能不能检查更新：只有 GitHub 来源的能。 */
+const canCheckUpdate = (rec) => rec.source?.kind === "github";
 
 /** 检查一个扩展的更新：有新版本返回下载好的包，没有返回 null。下载期间扩展被换掉或新包 id 不同都作废。 */
 async function checkUpdate(rec) {
-  const next = rec.source?.kind === "github" ? await checkGithubUpdate(rec.source) : await checkRepoUpdate(rec);
+  const next = await checkGithubUpdate(rec.source);
   if (records.get(rec.manifest.id) !== rec) throw new Error(L("扩展在检查期间被移除或替换了", "The extension was removed or replaced while checking for updates."));
   if (next && next.manifest.id !== rec.manifest.id) {
     throw new Error(L(`新版本的 id 变成了“${next.manifest.id}”，和已装的“${rec.manifest.id}”不同，没有安装`, `The new version’s ID is “${next.manifest.id}”, which doesn’t match the installed “${rec.manifest.id}”. It wasn’t installed.`));

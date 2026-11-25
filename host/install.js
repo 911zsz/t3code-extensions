@@ -125,7 +125,7 @@ function readFolder(fileList) {
   }, { kind: "local", folder });
 }
 
-// ---------- 本地插件（开发用）：记住文件夹，点“重新加载”时重读 ----------
+// ---------- 本地扩展（开发用）：记住文件夹，点“重新加载”时重读 ----------
 
 /** 能不能记住文件夹（File System Access API）；不能时退回一次性的文件夹导入。 */
 const canPickFolder = () => typeof window !== "undefined" && typeof window.showDirectoryPicker === "function";
@@ -151,7 +151,7 @@ function readHandle(dir) {
   }, { kind: "local", folder: dir.name, handle: dir });
 }
 
-/** “加载本地插件”：选文件夹并读出来（调用方再走 consent → install）。用户取消选择时返回 null。 */
+/** “添加本地扩展”：选文件夹并读出来（调用方再走 consent → install）。用户取消选择时返回 null。 */
 async function pickLocalFolder() {
   let dir;
   try {
@@ -163,7 +163,7 @@ async function pickLocalFolder() {
   return readHandle(dir);
 }
 
-/** 本地插件能不能重新加载：装的时候记住了文件夹。 */
+/** 本地扩展能不能重新加载：装的时候记住了文件夹。 */
 const canReload = (rec) => rec.source?.kind === "local" && !!rec.source.handle;
 
 /** 重新读同一个文件夹并替换（同一个文件夹是用户自己选的，不再弹安装确认）。必须在点击事件里调用：可能要重新申请读权限。 */
@@ -198,27 +198,8 @@ async function fetchRegistry(url) {
   };
 }
 
-const builtinOf = (id) => builtins.find((b) => b.manifest.id === id) ?? null;
-/** GitHub 来源是否就是内置扩展的仓库（从那里装的新版本可以覆盖内置版本）。按随宿主分发的仓库 ID 认，不认名字。 */
-function fromBuiltinRepo(source, id) {
-  const repoId = builtinOf(id)?.manifest.repositoryId;
-  return Number.isSafeInteger(repoId) && source?.kind === "github" && !source.path && source.repoId === repoId;
-}
-
-function addRecord(item, builtin) {
-  // overridesBuiltin：从内置扩展自己的仓库装的新版本；“移除”会恢复内置版本，设置和数据都保留。
-  const base = builtin ? null : builtinOf(item.manifest.id);
-  const overridesBuiltin = !!base;
-  // 构建时并进内置包的本机素材（local/，比如本机桌宠）不在公开仓库里：覆盖版沿用内置包的这部分。
-  const local = base ? Object.keys(base.files).filter((p) => p.startsWith("local/")) : [];
-  const merged = local.length
-    ? {
-        ...item,
-        files: { ...item.files, ...Object.fromEntries(local.map((p) => [p, base.files[p]])) },
-        manifest: { ...item.manifest, assets: [...(item.manifest.assets ?? []), ...local.filter((p) => base.manifest.assets?.includes(p) && !item.manifest.assets?.includes(p))] },
-      }
-    : item;
-  records.set(item.manifest.id, { ...merged, builtin, overridesBuiltin, status: "off", error: null, settings: null, life: null });
+function addRecord(item) {
+  records.set(item.manifest.id, { ...item, status: "off", error: null, settings: null, life: null });
 }
 
 function sourceText(source) {
@@ -229,21 +210,17 @@ function sourceText(source) {
     const commit = `GitHub ${githubName(source)} @ ${source.sha.slice(0, 7)}`;
     return L(`${commit}（${ref}）`, `${commit} (${ref})`);
   }
-  return source?.url ?? L("内置", "Built in");
+  return source?.url ?? "";
 }
 // 判断“是不是同一个来源的升级”：GitHub 扩展按仓库 ID + 子目录算（改名、大小写不影响，旧名被别人占用也认得出）。
 // 本地文件夹和 zip 只有个名字，证明不了是同一份，一律当不同来源，让用户看到“会沿用旧数据”的提醒。
 const sourceKey = (source) =>
-  source?.kind === "github" ? `github:${source.repoId}/${source.path}` : source?.kind === "local" || source?.kind === "zip" ? null : `${source?.kind}:${source?.url ?? "内置"}`;
+  source?.kind === "github" ? `github:${source.repoId}/${source.path}` : source?.kind === "local" || source?.kind === "zip" ? null : `${source?.kind}:${source?.url}`;
 
 /** 同 id 已装过的话，描述会被替换的那个（来源不同时要让用户知道）。 */
 function replacing(item) {
   const old = records.get(item.manifest.id);
   if (!old) return null;
-  if (builtinOf(item.manifest.id) && !fromBuiltinRepo(item.source, item.manifest.id)) {
-    throw new Error(L(`“${item.manifest.id}”和内置扩展同名`, `“${item.manifest.id}” is already used by a built-in extension`));
-  }
-  if (old.builtin) return { name: localized(old.manifest, "name"), version: old.manifest.version, from: sourceText(old.source), sameSource: true };
   const key = sourceKey(item.source);
   const sameSource = key !== null && sourceKey(old.source) === key;
   return { name: localized(old.manifest, "name"), version: old.manifest.version, from: sourceText(old.source), sameSource };
@@ -253,19 +230,18 @@ function replacing(item) {
 async function install(item) {
   if (!ready) throw new Error(L("扩展还在载入，稍后再试", "Extensions are still loading. Try again in a moment."));
   const id = item.manifest.id;
-  replacing(item); // 内置同名直接拒绝
   const old = records.get(id);
   const oldSaved = store.get("t3x:installed", []);
   const oldEnabled = store.get("t3x:enabled", {});
   const saveInstalled = () => store.set("t3x:installed", [...oldSaved.filter((x) => x.manifest.id !== id), { ...item, installedAt: new Date().toISOString() }]);
   if (old && !shouldRun(old)) {
     await saveInstalled(); // 写盘成功再换记录，失败时界面仍是旧版
-    addRecord(item, false);
+    addRecord(item);
     bump();
     return;
   }
   if (old) deactivate(old);
-  addRecord(item, false);
+  addRecord(item);
   const rec = records.get(id);
   activate(rec);
   if (rec.status !== "on") {
@@ -289,9 +265,8 @@ async function install(item) {
 /** 移除扩展：停用并删掉它的代码、启用状态和它自己存的数据，等写盘完成。 */
 async function uninstall(id) {
   const rec = records.get(id);
-  if (!rec || rec.builtin) return;
+  if (!rec) return;
   if (!ready) throw new Error(L("扩展还在载入，稍后再试", "Extensions are still loading. Try again in a moment."));
-  if (rec.overridesBuiltin) return restoreBuiltin(rec);
   deactivate(rec);
   records.delete(id);
   bump();
@@ -306,17 +281,6 @@ async function uninstall(id) {
   await Promise.all(writes);
 }
 
-/** 移除覆盖内置版本的那份：换回内置版本，开关、设置和数据都保留。 */
-async function restoreBuiltin(rec) {
-  const id = rec.manifest.id;
-  await store.set("t3x:installed", store.get("t3x:installed", []).filter((x) => x.manifest.id !== id));
-  deactivate(rec);
-  addRecord({ ...builtinOf(id), source: { kind: "builtin" } }, true);
-  const restored = records.get(id);
-  if (shouldRun(restored)) activate(restored);
-  bump();
-}
-
 function boot() {
   if (typeof document === "undefined") return;
   loadStore()
@@ -326,13 +290,7 @@ function boot() {
     })
     .finally(() => {
       ready = true;
-      for (const b of builtins) addRecord({ ...b, source: { kind: "builtin" } }, true);
-      for (const item of store.get("t3x:installed", [])) {
-        const base = builtinOf(item.manifest.id);
-        // 宿主升级后自带的内置版本更新时，不再用旧的覆盖版。
-        const override = base && fromBuiltinRepo(item.source, item.manifest.id) && !t3xNewer(base.manifest.version, item.manifest.version);
-        if (!records.has(item.manifest.id) || override) addRecord(item, false);
-      }
+      for (const item of store.get("t3x:installed", [])) addRecord(item);
       for (const rec of records.values()) if (shouldRun(rec)) activate(rec);
       bump();
     });

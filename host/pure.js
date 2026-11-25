@@ -40,11 +40,11 @@ function t3xCheckManifest(manifest, files) {
   }
   const badLocale = t3xLocalesError(manifest.locales);
   if (badLocale) fail(badLocale);
-  // repository：内置扩展从这个 GitHub 仓库检查更新。
+  // repository：扩展的 GitHub 仓库地址，设置页里显示为来源链接。
   if (manifest.repository !== undefined && !(typeof manifest.repository === "string" && t3xParseGithub(manifest.repository))) {
     fail(L("repository 需要是 https://github.com/作者/仓库 地址", "repository must be an https://github.com/owner/repo URL"));
   }
-  // repositoryId：GitHub 仓库的数字 ID。仓库改名或同名重建时，靠它认出是不是原来那个仓库。
+  // repositoryId：GitHub 仓库的数字 ID，可选；宿主目前只校验格式。
   if (manifest.repositoryId !== undefined && !Number.isSafeInteger(manifest.repositoryId)) fail(L("repositoryId 需要是整数", "repositoryId must be an integer"));
   const strings = (v) => Array.isArray(v) && v.every((p) => typeof p === "string");
   if (manifest.permissions !== undefined && !strings(manifest.permissions)) fail(L("permissions 需要是字符串数组", "permissions must be an array of strings"));
@@ -81,14 +81,6 @@ function t3xLocalesError(locales) {
 }
 
 const MAX_FILES = 64;
-
-/** 版本 a 是否比 b 新（只比 x.y.z 三段数字）。 */
-function t3xNewer(a, b) {
-  const parse = (v) => String(v).split(/[.+-]/).slice(0, 3).map((n) => Number.parseInt(n, 10) || 0);
-  const [x, y] = [parse(a), parse(b)];
-  for (let i = 0; i < 3; i += 1) if (x[i] !== y[i]) return x[i] > y[i];
-  return false;
-}
 
 /**
  * 设置页顶部选中的作用域 → 存储键。T3 的作用域：search.project（逻辑项目，可能横跨多个环境）、search.machine（环境）、
@@ -301,4 +293,4 @@ async function t3xUnzip(bytes, { maxFile = 5 << 20, maxTotal = 20 << 20, maxEntr
 }
 
 // @node-only
-if (typeof module === "object") module.exports = { t3xNewer, t3xScopeKeys, t3xEnabledAt, t3xLocalesError, t3xEntryList, t3xCheckManifest, t3xCheckRegistry, t3xEffortModel, t3xParseGithub, t3xRawUrl, t3xUnzip, GITHUB_TOPIC, SLOTS, API_VERSION };
+if (typeof module === "object") module.exports = { t3xScopeKeys, t3xEnabledAt, t3xLocalesError, t3xEntryList, t3xCheckManifest, t3xCheckRegistry, t3xEffortModel, t3xParseGithub, t3xRawUrl, t3xUnzip, GITHUB_TOPIC, SLOTS, API_VERSION };
