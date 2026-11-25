@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 "use strict";
-// 自检：纯函数、示例扩展能在宿主的包装里编译并激活、补丁能打到官方 0.1.11 上、asar 写出来能读回、注册表哈希一致。
+// 自检：纯函数、示例扩展能在宿主的包装里编译并激活、补丁能打到官方 T3 Code（版本见 lib/patch.cjs 的 T3_VERSION）上、asar 写出来能读回、注册表哈希一致。
 // 用法：node tests/verify.cjs [官方 T3 Code.app]（没有官方 app 时跳过补丁相关检查）
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -128,8 +128,8 @@ test("宿主设置页：无嵌套弹窗、对接 openSettings、appearancePatch 
 
   const { appearancePatch } = require("../lib/patch.cjs");
   const patched = appearancePatch.apply("/* dummy */");
-  for (const key of ["Section:cn", "Row:nn", "Switch:qt", "Button:p", "Input:h", "Select:Fe", "SelectTrigger:Pe", "SelectValue:je", "SelectPopup:Ne", "SelectItem:Ae",
-    "InputGroup:Tt", "InputGroupAddon:Ct", "InputGroupInput:wt", "Alert:pt", "AlertDescription:ft", "AlertAction:t3xAlertAction", "toast:Le", "Badge:t3xBadge", "Skeleton:t3xSkeleton",
+  for (const key of ["Section:me", "Row:X", "Switch:re", "Button:_", "Input:d", "Select:be", "SelectTrigger:ye", "SelectValue:ge", "SelectPopup:ve", "SelectItem:he",
+    "InputGroup:wt", "InputGroupAddon:St", "InputGroupInput:Ct", "Alert:ft", "AlertDescription:dt", "AlertAction:t3xAlertAction", "toast:ct", "Badge:t3xBadge", "Skeleton:t3xSkeleton",
     "Empty:t3xEmpty", "EmptyHeader:t3xEmptyHeader", "EmptyTitle:t3xEmptyTitle", "EmptyDescription:t3xEmptyDescription", "EmptyContent:t3xEmptyContent"]) {
     assert(patched.includes(key), `appearancePatch 缺少 ${key}`);
   }
@@ -141,11 +141,11 @@ test("宿主设置页：无嵌套弹窗、对接 openSettings、appearancePatch 
 test("宿主运行时能在 ES 模块里编译", () => {
   const code = runtime();
   assert(code.startsWith(MARKER));
-  // 宿主追加在 T3 的模块末尾，依赖模块里的 Z / $ / Jr；这里给替身，只检查语法和顶层不出错。
+  // 宿主追加在 T3 的模块末尾，依赖模块里的 Z / $ / Fn；这里给替身，只检查语法和顶层不出错。
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "t3x-rt-"));
   try {
     const file = path.join(dir, "rt.mjs");
-    fs.writeFileSync(file, `const Z={Component:class{}},$={},Jr=()=>[];\n${code}\nexport {};`);
+    fs.writeFileSync(file, `const Z={Component:class{}},$={},Fn=()=>[];\n${code}\nexport {};`);
     const r = require("node:child_process").spawnSync(process.execPath, ["--check", file], { encoding: "utf8" });
     assert.equal(r.status, 0, r.stderr);
   } finally {
@@ -153,10 +153,19 @@ test("宿主运行时能在 ES 模块里编译", () => {
   }
 });
 
+// appearancePatch 补导入的组件各自的 data-slot（作用域 hook 没有，靠导出名核对）
+const ADDED_SLOTS = {
+  t3xBadge: "badge", t3xSkeleton: "skeleton", t3xAlertAction: "alert-action", t3xEmpty: "empty",
+  t3xEmptyHeader: "empty-header", t3xEmptyTitle: "empty-title", t3xEmptyDescription: "empty-description", t3xEmptyContent: "empty-content",
+};
 const official = process.argv[2] ?? "/Applications/T3 Code (Beta).app";
 const asarFile = path.join(official, "Contents", "Resources", "app.asar");
-if (fs.existsSync(asarFile)) {
-  test("补丁打到官方 0.1.11，asar 写出后能读回", () => {
+const { T3_VERSION } = require("../lib/patch.cjs");
+const officialVersion = fs.existsSync(asarFile)
+  ? require("node:child_process").execFileSync("plutil", ["-extract", "CFBundleShortVersionString", "raw", path.join(official, "Contents", "Info.plist")], { encoding: "utf8" }).trim()
+  : null;
+if (officialVersion === T3_VERSION) {
+  test(`补丁打到官方 ${T3_VERSION}，asar 写出后能读回`, () => {
     const { patchArchive, patchesFor } = require("../install.cjs");
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "t3x-asar-"));
     try {
@@ -179,34 +188,72 @@ if (fs.existsSync(asarFile)) {
         same += 1;
       }
       assert(same > 10);
-      // host.contextMenu 动态引入 T3 自己的右键菜单模块：文件要在 _chat 同目录，导出名 r 是 show(items, position)
+      // host.contextMenu 动态引入 T3 自己的右键菜单模块：文件要在宿主所在模块同目录，导出名 r 是 show(items, position[, 第三个可选参数])
       const menuName = /CONTEXT_MENU_MODULE = "\.\/([\w.-]+)"/.exec(fs.readFileSync(path.join(__dirname, "..", "host", "core.js"), "utf8"))[1];
       const menu = before.read(`apps/server/dist/client/assets/${menuName}`).toString("utf8");
-      assert(menu.includes("export{c as n,u as r,l as t}") && /function u\(n,r\)\{return l\(\),new Promise/.test(menu), "右键菜单模块的导出变了");
+      assert(menu.includes("export{c as n,u as r,l as t}") && /function u\(n,r,c\)\{return l\(\),new Promise/.test(menu), "右键菜单模块的导出变了");
       // showConfirm 动态引入 T3 的确认框：导出名 D 是 confirm(message, { variant })，没有确认框挂载时返回 undefined
       const confirmName = /CONFIRM_MODULE = "\.\/([\w.-]+)"/.exec(fs.readFileSync(path.join(__dirname, "..", "host", "core.js"), "utf8"))[1];
       const toast = before.read(`apps/server/dist/client/assets/${confirmName}`).toString("utf8");
-      assert(/ot as D[,}]/.test(toast) && toast.includes("function ot(e,t){if(tt.size!==0)return new Promise"), "确认框模块的导出变了");
+      assert(/Nt as D[,}]/.test(toast) && toast.includes("function Nt(e,t){if(Ot.size!==0)return new Promise"), "确认框模块的导出变了");
       // t3xUi 借用外观页已导入的别名，要确认它们来自对应模块；补的 import 要在目标模块的导出里
       const { appearancePatch } = require("../lib/patch.cjs");
       const appearance = before.read(findOne(before, appearancePatch.targetRegex, appearancePatch.label)).toString("utf8");
-      for (const [file, names] of [["input-group-", ["t as Tt", "n as Ct", "r as wt"]], ["alert-", ["t as pt", "r as ft"]], ["toast-", ["i as Le"]]]) {
-        const imp = new RegExp(`import\\{([^}]*)\\}from"\\./${file}`).exec(appearance);
-        for (const n of names) assert(imp && imp[1].split(",").includes(n), `外观页没有从 ${file}* 导入 ${n}`);
+      for (const [file, names] of [
+        ["settingsLayout-", ["i as de", "s as me", "a as X"]],
+        ["main-", ["gi as re"]],
+        ["utils-Bng1kvMW", ["Vi as _", "Di as d"]],
+        ["select-", ["t as be", "s as ye", "c as ge", "o as ve", "a as he"]],
+        ["input-group-", ["t as wt", "n as St", "r as Ct"]],
+        ["alert-", ["t as ft", "r as dt"]],
+        ["toast-", ["i as ct"]],
+      ]) {
+        // 以 - 结尾的是“名字-8 位哈希.js”，免得 alert- 撞上 alert-dialog-；否则是完整文件名
+        const src = file.endsWith("-") ? `${file}[\\w-]{8}\\.js` : `${file}\\.js`;
+        const imported = [...appearance.matchAll(new RegExp(`import\\{([^}]*)\\}from"\\./${src}"`, "g"))].flatMap((m) => m[1].split(","));
+        for (const n of names) assert(imported.includes(n), `外观页没有从 ${file}* 导入 ${n}`);
       }
+      // 聊天补丁：working / awaiting 和 T3 传给原生时间线的是同一个东西（变量名写错时语法照样通过，扩展会拿到别的值）
+      const { chatPatch } = require("../lib/patch.cjs");
+      const chatSrc = before.read(findOne(before, chatPatch.targetRegex, chatPatch.label)).toString("utf8");
+      const state = /t3xHost\.ChatOverlay,\{state:\{(.*?)\}\}\)/.exec(chatPatch.apply(chatSrc))[1];
+      const field = (k) => new RegExp(`(?:^|,)${k}:(.*?)(?=,[a-zA-Z]+:|$)`).exec(state)?.[1];
+      assert.equal(field("working"), /isWorking:([\w$]+),runlessWorkActive:/.exec(chatSrc)?.[1], "working 要和原生时间线的 isWorking 是同一个变量");
+      assert.equal(field("awaiting"), /awaitingUser:(.*?),awaitingRequestId:/.exec(chatSrc)?.[1], "awaiting 要照抄原生时间线的 awaitingUser");
+      // 宿主运行时绑定的 React / jsx / 档位选项函数，要是这个模块顶层真有的名字（未声明的名字到启动时才报 ReferenceError）
+      const bind = /\}\)\(\{React:([\w$]+),jsx:([\w$]+),choices:([\w$]+)\}/.exec(runtime());
+      assert(bind, "找不到宿主运行时的 bind");
+      for (const name of bind.slice(1)) {
+        const n = name.replace(/\$/g, "\\$");
+        const declared = new RegExp(`import\\{[^}]*(?:\\bas |[{,])${n}[,}]`).test(chatSrc) || new RegExp(`(?:^|[;}\\n])var (?:[^;]*?,)?${n}=`).test(chatSrc);
+        assert(declared, `宿主绑定的 ${name} 不是 ${chatPatch.label}顶层的名字`);
+      }
+      // 名字存在还不够：档位选项函数要是 T3 档位列表组件自己调用的那个（let e=Fn(i.descriptor)）
+      const effortFn = chatSrc.slice(chatSrc.indexOf("function zz(e){"));
+      assert.equal(bind[3], /=([\w$]+)\(i\.descriptor\)/.exec(effortFn)?.[1], "choices 要是档位列表组件里取选项的那个函数");
       const added = [...appearancePatch.apply("").matchAll(/import\{([^}]*)\}from"\.\/([^"]+)"/g)];
       for (const want of ["utils-", "skeleton-", "alert-", "empty-", "settingsLayout-"]) assert(added.some((m) => m[2].startsWith(want)), `appearancePatch 没有从 ${want}* 导入`);
       for (const [, names, file] of added) {
         const mod = before.read(`apps/server/dist/client/assets/${file}`).toString("utf8");
         const exported = new Set([...mod.matchAll(/export\{([^}]*)\}/g)].flatMap((m) => m[1].split(",").map((s) => s.split(" as ").pop())));
         for (const n of names.split(",")) assert(exported.has(n.split(" as ")[0]), `${file} 没有导出 ${n}`);
+        // 按组件自己的 data-slot 认：导出名在别的模块里也可能存在（比如 alert-dialog 也导出 n）
+        const localOf = new Map([...mod.matchAll(/export\{([^}]*)\}/g)].flatMap((m) => m[1].split(",").map((s) => { const [l, e = l] = s.split(" as "); return [e, l]; })));
+        for (const n of names.split(",")) {
+          const [exp, alias] = n.split(" as ");
+          const want = ADDED_SLOTS[alias];
+          if (!want) continue;
+          const at = mod.indexOf(`"data-slot":\`${want}\``);
+          const fn = at < 0 ? null : [...mod.slice(0, at).matchAll(/function ([\w$]+)\(/g)].at(-1)?.[1];
+          assert.equal(fn, localOf.get(exp), `${file} 的 ${exp} 不是 data-slot=${want} 的组件`);
+        }
       }
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
 } else {
-  console.log(`- 跳过补丁检查：没有 ${asarFile}`);
+  console.log(officialVersion ? `- 跳过补丁检查：${official} 是 ${officialVersion}，补丁针对 ${T3_VERSION}（可以把 ${T3_VERSION} 的 app 路径作为参数传进来）` : `- 跳过补丁检查：没有 ${asarFile}`);
 }
 
 test("作用域键、按作用域启用", () => {

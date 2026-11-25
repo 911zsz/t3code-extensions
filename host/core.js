@@ -1,4 +1,4 @@
-// 扩展宿主核心。构建时和 settings.js 一起包进同一个函数，追加到 T3 Code 的 _chat 模块末尾。
+// 扩展宿主核心。构建时和 settings.js 一起包进同一个函数，追加到 T3 Code 的 ThreadRouteView 模块末尾（_chat 静态导入它）。
 // 作用域里有 bind（T3 自己的 React、jsx 运行时、推理档位选项函数）。
 
 const { React } = bind;
@@ -213,9 +213,9 @@ function compile(id, code) {
 }
 
 // 右键菜单：用 T3 自己画的那套（网页版的右键菜单，和 T3 下拉菜单同一套样式），不用 macOS 原生菜单。
-// 宿主追加在 _chat 模块里，相对路径从 assets 目录解析；文件名带构建哈希，补丁本来就只认 0.1.11。
+// 宿主追加在 ThreadRouteView 模块里，相对路径从 assets 目录解析；文件名带构建哈希，补丁本来就只认 0.1.12。
 // items 格式同 desktopBridge.showContextMenu：{ id, label, detail, icon, checked, disabled, separatorBefore, children }，返回选中项 id 或 null。
-const CONTEXT_MENU_MODULE = "./contextMenuFallback-BO-iYrql.js";
+const CONTEXT_MENU_MODULE = "./contextMenuFallback-BiKUAfIY.js";
 let contextMenuModule = null;
 function showContextMenu(items, position) {
   contextMenuModule ??= import(CONTEXT_MENU_MODULE);
@@ -236,7 +236,7 @@ const dom = {
 };
 
 // T3 自己的确认框（删除会话用的那个）：以“？”结尾的那行是标题，其余行是说明；返回 true/false。
-const CONFIRM_MODULE = "./toast-DoB9Gbxj.js";
+const CONFIRM_MODULE = "./toast-C8N5avui.js";
 let confirmModule = null;
 function showConfirm(message, options) {
   confirmModule ??= import(CONFIRM_MODULE);

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 "use strict";
-// macOS：把官方 T3 Code 0.1.11 复制一份到 ~/Applications，打上扩展宿主补丁，本机重新签名。官方版不动。
+// macOS：把官方 T3 Code（版本见 lib/patch.cjs 的 T3_VERSION）复制一份到 ~/Applications，打上扩展宿主补丁，本机重新签名。官方版不动。
 const assert = require("node:assert/strict");
 const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
@@ -50,7 +50,7 @@ function isRunning() {
   }
 }
 
-/** 给 asar 打补丁写到 outFile；每个目标文件先核对 0.1.11 的原始哈希。返回头部哈希。 */
+/** 给 asar 打补丁写到 outFile；每个目标文件先核对 T3_VERSION 的原始哈希。返回头部哈希。 */
 function patchArchive(asarFile, patches, outFile) {
   const asar = readAsar(asarFile);
   const replacements = new Map();
@@ -78,6 +78,8 @@ function verifyOfficial(app) {
 function status() {
   if (!fs.existsSync(INSTALL_DIR)) return console.log("尚未安装。");
   assert(isOurs(), `安装位置被其他应用占用：${INSTALL_DIR}`);
+  const installed = plist(INSTALL_DIR, "CFBundleShortVersionString");
+  assert.equal(installed, T3_VERSION, `已安装的是基于 T3 Code ${installed} 的版本，这一版针对 ${T3_VERSION}：先退出应用，运行 node install.cjs uninstall，再 install`);
   const isolated = isIsolated();
   const asar = readAsar(path.join(INSTALL_DIR, APP_ASAR));
   for (const p of patchesFor(isolated)) {
