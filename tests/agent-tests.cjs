@@ -11,7 +11,8 @@ const tmp = (prefix) => fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 /** 单独求值 agent.js：宿主里它和 core.js 等拼在同一个函数里，这里把用到的外部名字换成桩。 */
 function loadAgent({ chat, threads = [], projects = [], bridge = null } = {}) {
   const src = fs.readFileSync(path.join(__dirname, "..", "host", "agent.js"), "utf8");
-  const React = { useMemo: (fn) => fn(), useRef: (v) => ({ current: v }), useCallback: (fn) => fn };
+  const subscribed = [];
+  const React = { useMemo: (fn) => fn(), useRef: (v) => ({ current: v }), useCallback: (fn) => fn, useSyncExternalStore: (sub, get) => (subscribed.push(sub), get()) };
   const sent = [];
   const bind = {
     agent: {
@@ -23,8 +24,9 @@ function loadAgent({ chat, threads = [], projects = [], bridge = null } = {}) {
   };
   const L = (zh) => zh;
   const state = { chat };
-  const api = new Function("bind", "React", "L", "state", "serverBridge", `${src.replace(/\blastChat\b/g, "state.chat")}\nreturn { agentApi, outputsApi, agentImages, agentProviders };`)(bind, React, L, state, bridge);
-  return { ...api, bind, sent, state };
+  const subscribeChat = () => () => {};
+  const api = new Function("bind", "React", "L", "state", "serverBridge", "subscribeChat", `${src.replace(/\blastChat\b/g, "state.chat")}\nreturn { agentApi, outputsApi, agentImages, agentProviders };`)(bind, React, L, state, bridge, subscribeChat);
+  return { ...api, bind, sent, state, subscribed, subscribeChat };
 }
 
 const PNG = `data:image/png;base64,${Buffer.from("fake png bytes").toString("base64")}`;
@@ -150,10 +152,15 @@ module.exports = (test) => {
       shell({ id: "t-1", title: "Old", interactionMode: "plan", runtime: { status: "running", activeRunId: "r-1", lastError: null } }),
       shell({ id: "t-2", title: "Broken", runtime: { status: "failed", activeRunId: null, lastError: "provider crashed" }, latestRun: { runId: "r-2", status: "failed", completedAt: "2026-11-25T10:00:00.000Z" } }),
       shell({ id: "t-3", title: "Done", latestRun: { runId: "r-3", status: "completed", completedAt: "2026-11-25T11:00:00.000Z" } }),
+      // 在等你：字段照 T3 0.1.12 客户端的会话 shell（侧边栏的 needs approval / needs input 用的同一组）
+      shell({ id: "t-4", title: "Ask", hasPendingApprovals: true, hasPendingUserInput: true }),
+      shell({ id: "t-5", title: "Question", hasPendingUserInput: true }),
+      shell({ id: "t-6", title: "Parent", pendingSubagentRequest: "user_input" }),
     ];
     const other = [shell({ environmentId: "env-2", id: "t-9", title: "Elsewhere" })];
     const projects = [{ environmentId: "env-1", id: "p-1", title: "Scratch", isScratch: true }, { environmentId: "env-2", id: "p-9", title: "Other env" }];
-    const { agentApi, sent, bind, state } = loadAgent({ chat, threads: [...threads, ...other], projects });
+    const loaded = loadAgent({ chat, threads: [...threads, ...other], projects });
+    const { agentApi, sent, bind, state } = loaded;
 
     assert.throws(() => agentApi(rec(["ui"]), alive()).providers(), /agent/, "没声明 agent 权限就不给用");
     const life = alive();
@@ -165,9 +172,14 @@ module.exports = (test) => {
         ["t-1", true, null, null, "plan"],
         ["t-2", false, "provider crashed", "2026-11-25T10:00:00.000Z", "default"],
         ["t-3", false, null, "2026-11-25T11:00:00.000Z", "default"],
+        ["t-4", false, null, null, "default"],
+        ["t-5", false, null, null, "default"],
+        ["t-6", false, null, null, "default"],
       ],
       "只列当前环境的会话，运行中 / 出错 / 完成时间从 runtime、latestRun 读",
     );
+    assert.deepEqual(agent.useThreads().map((t) => t.needs), [null, null, null, "approval", "input", "input"], "批准优先；子代理在等也算");
+    assert(loaded.subscribed.every((sub) => sub === loaded.subscribeChat), "订阅聊天视图换环境：环境是它在 effect 里报上来的");
     assert.deepEqual(agent.useProjects().map((p) => [p.projectId, p.scratch]), [["p-1", true]]);
 
     const send = agent.useSend();

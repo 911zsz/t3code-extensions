@@ -35,10 +35,14 @@ const currentEnvironment = () => (typeof lastChat?.environmentId === "string" ? 
 
 const errorText = (e) => (typeof e === "string" ? e : typeof e?.message === "string" ? e.message : null);
 
+// 会话在等你什么：和 T3 侧边栏同一套判断（批准优先；pendingSubagentRequest 是它派出的子代理在等）。
+const threadNeeds = (s) =>
+  s.hasPendingApprovals === true || s.pendingSubagentRequest === "approval" ? "approval" : s.hasPendingUserInput === true || s.pendingSubagentRequest === "user_input" ? "input" : null;
+
 /** 当前环境里能看到的会话（hook）。运行状态在 shell 的 runtime / latestRun 里（T3 0.1.12 的 visibleThreadShellsAtom）。 */
 function useAgentThreads() {
   const shells = bind.agent.useThreads();
-  const env = currentEnvironment();
+  const env = React.useSyncExternalStore(subscribeChat, currentEnvironment); // 环境是聊天视图在 effect 里报上来的，换了要重新渲染
   return React.useMemo(
     () =>
       (Array.isArray(shells) ? shells : [])
@@ -56,6 +60,7 @@ function useAgentThreads() {
           lastError: errorText(s.runtime?.lastError) ?? (s.latestRun?.status === "failed" ? L("这一轮失败了", "The run failed") : null),
           lastRunCompletedAt: s.latestRun?.completedAt ?? null,
           archived: s.archivedAt != null,
+          needs: threadNeeds(s),
         })),
     [shells, env],
   );
@@ -64,7 +69,7 @@ function useAgentThreads() {
 /** 当前环境里的项目（hook）；scratch 是 T3 的“无项目”。 */
 function useAgentProjects() {
   const projects = bind.agent.useProjects();
-  const env = currentEnvironment();
+  const env = React.useSyncExternalStore(subscribeChat, currentEnvironment);
   return React.useMemo(
     () =>
       (Array.isArray(projects) ? projects : [])
