@@ -7,6 +7,7 @@ const t3xServerMain = (() => {
   const path = require("node:path");
   const os = require("node:os");
   const crypto = require("node:crypto");
+  const net = require("node:net");
   const ID_RE = /^[a-z0-9][a-z0-9.-]{1,63}$/;
   const LIMIT = { extensions: 64, installed: 256, code: 5 << 20, version: 40 }; // code 和窗口里单个文件的上限（install.js LIMITS.file）一致
   const fail = (msg) => {
@@ -29,7 +30,8 @@ const t3xServerMain = (() => {
   // 窗口传来的内容按不可信处理：id 会拼进路径，代码有大小上限。
   function check(payload) {
     if (!payload || typeof payload !== "object") fail("同步内容无效");
-    const { extensions, installed } = payload;
+    const { extensions, installed, lang } = payload;
+    if (lang !== undefined && lang !== "zh" && lang !== "en") fail("lang 无效");
     if (!Array.isArray(installed) || installed.length > LIMIT.installed || !installed.every((id) => typeof id === "string" && ID_RE.test(id))) fail("installed 无效");
     if (!Array.isArray(extensions) || extensions.length > LIMIT.extensions) fail("extensions 无效");
     const seen = new Set();
@@ -62,7 +64,10 @@ const t3xServerMain = (() => {
       if (!fs.existsSync(abs)) writeAtomic(abs, e.code);
       return { id: e.id, version: e.version, file, sha256 };
     });
-    writeAtomic(path.join(dir, "index.json"), `${JSON.stringify({ version: 1, extensions: entries }, null, 2)}\n`);
+    // lang：界面语言，后台扩展用 t3x.lang() 读（apiVersion 6）
+    const indexText = `${JSON.stringify({ version: 1, lang: payload.lang === "zh" ? "zh" : "en", extensions: entries }, null, 2)}\n`;
+    writeAtomic(path.join(dir, "index.json"), indexText);
+    indexGen.set(dir, crypto.createHash("sha256").update(indexText).digest("hex"));
     const current = new Map(entries.map((e) => [e.id, path.basename(e.file)]));
     for (const id of fs.readdirSync(codeRoot)) {
       const sub = path.join(codeRoot, id);
@@ -149,6 +154,55 @@ const t3xServerMain = (() => {
     }
   }
 
+  // apiVersion 6：窗口里的扩展调用自己后台用 t3x.handle 登记的函数（host.server.call）。
+  // T3 后台在 <dir>/rpc.sock 上听（目录 0700，只有这台 Mac 上的这个用户能连）；一次调用一条连接，去一行 JSON、回一行 JSON。
+  // 扩展 id 由窗口里的宿主按调用方填，扩展自己改不了；参数和返回值只能是 JSON，有大小和时间上限。
+  const CALL_NAME_RE = /^[A-Za-z][\w.-]{0,63}$/;
+  const CALL_LIMIT = { request: 256 << 10, response: 4 << 20, ms: 60_000 }; // 按 UTF-8 字节算
+  const indexGen = new Map(); // dir -> 最近写的 index.json 的 SHA-256：调用带上它，后台还没重载到这一份就先重载
+
+  function call(dir, id, name, data) {
+    if (typeof id !== "string" || !ID_RE.test(id)) fail("扩展 id 无效");
+    if (typeof name !== "string" || !CALL_NAME_RE.test(name)) fail(`调用名无效：${String(name).slice(0, 80)}`);
+    let line;
+    try {
+      line = JSON.stringify({ ext: id, name, data: data ?? null, gen: indexGen.get(dir) ?? null });
+    } catch {
+      fail("参数要能转成 JSON");
+    }
+    if (Buffer.byteLength(line) > CALL_LIMIT.request) fail("参数超过 256 KB");
+    return new Promise((resolve, reject) => {
+      const sock = net.connect(path.join(dir, "rpc.sock"));
+      let buf = "";
+      let size = 0;
+      const done = (fn, value) => {
+        clearTimeout(timer);
+        sock.destroy();
+        fn(value);
+      };
+      const timer = setTimeout(() => done(reject, new Error(`t3x: ${name} 超过 ${CALL_LIMIT.ms / 1000} 秒没有结果`)), CALL_LIMIT.ms);
+      sock.setEncoding("utf8");
+      sock.on("connect", () => sock.write(`${line}\n`));
+      sock.on("data", (chunk) => {
+        buf += chunk;
+        size += Buffer.byteLength(chunk);
+        if (size > CALL_LIMIT.response + 1024) return done(reject, new Error("t3x: 后台返回超过 4 MB"));
+        const nl = buf.indexOf("\n");
+        if (nl < 0) return;
+        let msg;
+        try {
+          msg = JSON.parse(buf.slice(0, nl));
+        } catch {
+          return done(reject, new Error("t3x: 后台返回的不是 JSON"));
+        }
+        if (msg?.ok === true) done(resolve, msg.result);
+        else done(reject, new Error(String(msg?.error ?? "后台调用失败").slice(0, 500)));
+      });
+      sock.on("error", (error) => done(reject, new Error(error.code === "ENOENT" || error.code === "ECONNREFUSED" ? "t3x: T3 后台还没准备好，稍后再试" : `t3x: ${error.message}`)));
+      sock.on("close", () => done(reject, new Error("t3x: 后台没有回应就断开了")));
+    });
+  }
+
   /** T3 后台写的加载结果；还没加载过时是空的。 */
   function status(dir) {
     try {
@@ -173,9 +227,10 @@ const t3xServerMain = (() => {
     const out = outputRoot(dir);
     electron.ipcMain.handle("t3x:out:dir", guard((id) => outputDir(out, id)));
     electron.ipcMain.handle("t3x:out:read", guard((id, rel) => readOutput(out, id, rel)));
+    electron.ipcMain.handle("t3x:server:call", guard((id, name, data) => call(dir, id, name, data)));
   }
 
-  return { serverDir, sync, status, outputRoot, outputDir, readOutput, install };
+  return { serverDir, sync, status, outputRoot, outputDir, readOutput, call, install };
 })();
 if (process.versions.electron && process.type === "browser") t3xServerMain.install(require("electron"));
 // @node-only

@@ -7,8 +7,9 @@ const L = (zh, en) => (isZh() ? zh : en);
 // 2：设置面板的 ui 加了 Input / Select 系列，host 加了 openSettings、contextMenu。3：host 加了 dom、confirm。
 // 4：entries.server，后台扩展（在 T3 后台以用户权限运行，要声明 permissions: ["server"]）。
 // 5：host.agent（用你的 agent 开会话、发消息，要声明 permissions: ["agent"]）和 host.outputs（扩展自己的输出目录）。
+// 6：host.server.call ↔ t3x.handle（扩展自己的窗口和后台互相调用）和 t3x.lang()。
 // 旧 apiVersion 的扩展照常能用；用到新接口的扩展声明新值，旧宿主会拒绝安装，而不是装上后出错。
-const API_VERSION = 5;
+const API_VERSION = 6;
 const SERVER_API_VERSION = 4;
 const AGENT_API_VERSION = 5;
 const REGISTRY_VERSION = 1; // 注册表格式没变

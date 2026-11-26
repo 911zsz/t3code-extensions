@@ -326,6 +326,7 @@ function makeApi(rec, life) {
     chat: { last: () => lastChat },
     agent: agentApi(rec, life),
     outputs: outputsApi(rec, life),
+    server: serverApi(rec, life),
     lang: () => (isZh() ? "zh" : "en"),
     useLang,
     t: L,

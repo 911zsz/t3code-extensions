@@ -22,7 +22,7 @@
 | 边缘光 [`t3x-edge-glow`](https://github.com/ZiHao256/t3x-edge-glow) | 需要审批（琥珀）、等你回答（蓝）、出错（红）、后台跑完（绿）时窗口边缘亮光。动效档位：省电 / 混合 / 30fps |
 | 推理强度滑条 [`t3x-effort-slider`](https://github.com/ZiHao256/t3x-effort-slider) | 把模型面板里“推理强度”的档位列表换成竖向分档滑条（最高档在上，档名写在刻度旁边），档位越高星点越亮越快，最高档流动星云。星点动效：跟随档位 / 静态 / 关闭 |
 | 桌宠 [`t3x-desk-pets`](https://github.com/ZiHao256/t3x-desk-pets) | 输入框上沿站着当前 agent 的宠物，跟会话状态动，上下文越满越胖，压缩历史时挤扁、压完弹回；子代理各派一只到旁边干活、收工击掌；每只都能单独拖，拖到另一只身上会互动；窗口不在前台或切到别的会话时错过的进出场，回来补播。右键宠物有菜单（T3 样式）：换一只、打个招呼、安静模式、桌宠设置、隐藏；隐藏后右键输入框里的模型选择器叫回。每个 agent 用哪只、宠物库（增删改）在设置里；也能选 harness、模型和会话，让 agent 照描述或参考图生成新宠物，预览每个动作、让它修改后再导入（用 `host.agent`）。内置 Codex、Clawd、Moffy 和鲸鱼娘 Dafeiyu（社区同人形象，出处和授权见扩展 README） |
-| Antigravity 官方额度 [`t3x-agy-usage`](https://github.com/ZiHao256/t3x-agy-usage) | 额度面板里的 Antigravity 额度改由官方 CLI 的 `/usage` 读取：每个实例用自己的登录，不发消息、不耗 token，T3 不再自己读 token 去调 Google 的接口。后台扩展（见下文“后台扩展”） |
+| Antigravity 官方额度 [`t3x-agy-usage`](https://github.com/ZiHao256/t3x-agy-usage) | 额度面板里的 Antigravity 额度改由官方 CLI 的 `/usage` 读取：每个实例用自己的登录，不发消息、不耗 token，T3 不再自己读 token 去调 Google 的接口。设置里能看每个实例的读取结果、立即重读、选面板里显示哪些额度。后台扩展（见下文“后台扩展”） |
 
 ![“浏览”：GitHub 上带 t3code-extension 话题的社区扩展](docs/browse.png)
 
@@ -109,7 +109,7 @@ my-ext/
 }
 ```
 
-`apiVersion`：用到 `host.agent` 或 `host.outputs` 写 `5`；带后台脚本（`entries.server`）写 `4`；用到 `host.dom` 或 `host.confirm()` 写 `3`；用到设置面板的 `Input` / `Select` 系列、`host.openSettings()` 或 `host.contextMenu()` 写 `2`；只用其余接口写 `1`。宿主会拒绝安装 apiVersion 比自己新的扩展。
+`apiVersion`：用到 `host.server` 或后台的 `t3x.handle` / `t3x.lang` 写 `6`；用到 `host.agent` 或 `host.outputs` 写 `5`；带后台脚本（`entries.server`）写 `4`；用到 `host.dom` 或 `host.confirm()` 写 `3`；用到设置面板的 `Input` / `Select` 系列、`host.openSettings()` 或 `host.contextMenu()` 写 `2`；只用其余接口写 `1`。宿主会拒绝安装 apiVersion 比自己新的扩展。
 
 `repository` 可选：扩展的 GitHub 仓库，卡片上的“详情”链接到这里。
 
@@ -134,6 +134,7 @@ my-ext/
 | `host.chat.last()` | 最近一次聊天视图的会话状态（设置页里也能拿到 provider 列表） |
 | `host.agent` | 用你在 T3 里配置的 agent 开会话、发消息，要声明 `"permissions": ["agent"]`，见下文“让 agent 干活” |
 | `host.outputs.dir()`、`host.outputs.read(path)` | 扩展自己的输出目录 `<T3 数据目录>/t3x-out/<id>/`：`dir()` 返回绝对路径（不存在就建），`read("job/sheet.png")` 读里面的文件，不存在是 `null`，否则 `{ bytes, size, modified }`。只读普通文件，路径不能含 `..`、不跟随符号链接、不读硬链接，单个文件最大 32 MB；读的时候文件大小变了（还在写）会抛错，稍后再读 |
+| `host.server.call(name, data?)` | 调用本扩展后台用 `t3x.handle(name, fn)` 登记的函数，返回它的结果；只有带后台脚本的扩展有。见下文“后台扩展” |
 | `host.lang()`、`host.useLang()` | 当前界面语言：T3 是中文时为 `"zh"`，其他语言都是 `"en"`。`useLang` 是 React hook，切语言时触发重绘 |
 | `host.t(中文, 英文)` | 按当前界面语言二选一；在渲染时调用，组件里先调一次 `host.useLang()` |
 | `host.onDispose(fn)` | 停用时调用 |
@@ -179,7 +180,24 @@ export function activate(t3x) {
 | `id`、`version` | 扩展的 id 和版本 |
 | `dataDir` | 扩展自己的数据目录（不保证已存在）；卸载扩展时整个删掉，停用和升级时保留 |
 | `log(...args)` | 写进 T3 后台日志 |
+| `lang()` | 当前界面语言，`"zh"` 或 `"en"`（同 `host.lang()`），切换后下一次调用就是新值 |
+| `handle(name, fn)` | 处理窗口里 `host.server.call(name, data)`：`fn(data)` 的返回值（可以是 Promise）就是调用结果，抛错时窗口那边收到同样的说明。返回取消函数，停用时自动撤掉 |
 | `usage.registerSource({ driver, read })` | 接手某个 provider 的额度读取，目前只支持 `antigravity`。接手后 T3 不再用自己的方式读：读取出错、或者启用的后台扩展没加载起来，面板都显示原因，不会退回 T3 自己的读取；`read(ctx)` 的结果显示在 T3 原生的额度面板里。`ctx`：`instanceId`、`profileDirectory`（T3 给这个实例的配置目录）、`authMethod`、`executablePath`（T3 解析出的 CLI 路径）、`environment`。返回 `{ windows: [{ id, label, kind: "session"/"weekly"/"monthly"/"other", usedPercent, resetsAt?, windowDurationMins? }] }`，出错就抛（消息显示在面板里），60 秒没结果算失败。同一个 provider 只能由一个扩展接手 |
+
+窗口和后台之间用 `host.server.call` ↔ `t3x.handle` 通信，扩展的设置、状态、按钮都可以自己做，不用等宿主加接口：
+
+```js
+// server.mjs
+export function activate(t3x) {
+  let hidden = [];
+  t3x.handle("setHidden", (ids) => (hidden = ids));
+  t3x.handle("status", () => ({ hidden, lang: t3x.lang() }));
+}
+// web.js（设置面板里）
+const status = await host.server.call("status");
+```
+
+参数和结果只能是 JSON（参数最大 256 KB，结果最大 4 MB），50 秒没结果算失败。扩展 id 由宿主按调用方填，只能调到自己的后台。通道是 T3 后台在 `<T3 数据目录>/t3x-server/rpc.sock` 上开的本地 socket，目录只有你的用户能进。
 
 启用、停用、升级后台扩展时，窗口把代码交给 Electron 主进程，写到 `<T3 数据目录>/t3x-server/`，T3 后台发现变化后重新加载（不用重启）。只有本应用启动的 T3 后台会加载它们：用官方 T3 Code 打开同一份数据时，后台扩展不运行，T3 照常用自己的方式读额度。
 

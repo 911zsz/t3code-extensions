@@ -22,7 +22,7 @@ The host ships without extensions. The four extensions the author maintains each
 | Edge glow [`t3x-edge-glow`](https://github.com/ZiHao256/t3x-edge-glow) | Lights up the window edge when an approval is needed (amber), the agent is waiting for your answer (blue), an error occurs (red), or a background run finishes (green). Motion: power saving / mixed / 30 fps |
 | Effort slider [`t3x-effort-slider`](https://github.com/ZiHao256/t3x-effort-slider) | Replaces the reasoning effort list in the model panel with a vertical stepped slider (highest level at the top, level names next to the ticks); higher levels make the stars brighter and faster, and the top level adds a flowing nebula. Star motion: follow the level / static / off |
 | Desk pets [`t3x-desk-pets`](https://github.com/ZiHao256/t3x-desk-pets) | Pets for the current agent stand on the composer and react to the thread state. They swell as the context fills up, squash while T3 compacts history and pop back afterwards. Each subagent sends its own pet to work alongside, and it high-fives when done. Every pet can be dragged on its own, and dropping one onto another makes them interact; entrances and exits missed while the window was in the background or on another thread replay when you come back. Right-click a pet for a T3-style menu: switch pet, say hi, quiet mode, desk pet settings, hide; after hiding, right-click the model picker in the composer to bring them back. Settings let you choose a pet per agent and edit the pet library; you can also pick a harness, model and thread and have an agent generate a new pet from a description or reference images, preview every animation, ask for revisions and import it (uses `host.agent`). Built in: Codex, Clawd, Moffy and the whale girl Dafeiyu (a community fan character; credits and license are in the extension's README) |
-| Antigravity usage via CLI [`t3x-agy-usage`](https://github.com/ZiHao256/t3x-agy-usage) | Reads the Antigravity limits in the usage panel with the official CLI's `/usage` command: each instance uses its own sign-in, no message is sent and no tokens are spent, and T3 stops reading the token itself to call Google's API. A background extension (see "Background extensions" below) |
+| Antigravity usage via CLI [`t3x-agy-usage`](https://github.com/ZiHao256/t3x-agy-usage) | Reads the Antigravity limits in the usage panel with the official CLI's `/usage` command: each instance uses its own sign-in, no message is sent and no tokens are spent, and T3 stops reading the token itself to call Google's API. Its settings show each instance's last read, read again on demand, and choose which limits the panel shows. A background extension (see "Background extensions" below) |
 
 ![Browse: community extensions on GitHub with the t3code-extension topic](docs/browse.png)
 
@@ -109,7 +109,7 @@ my-ext/
 }
 ```
 
-`apiVersion`: `5` if you use `host.agent` or `host.outputs`; `4` with a background script (`entries.server`); `3` if you use `host.dom` or `host.confirm()`; `2` if you use the settings panel's `Input` / `Select` family, `host.openSettings()` or `host.contextMenu()`; `1` if you use only the other APIs. The host refuses to install extensions whose apiVersion is newer than its own.
+`apiVersion`: `6` if you use `host.server` or the background `t3x.handle` / `t3x.lang`; `5` if you use `host.agent` or `host.outputs`; `4` with a background script (`entries.server`); `3` if you use `host.dom` or `host.confirm()`; `2` if you use the settings panel's `Input` / `Select` family, `host.openSettings()` or `host.contextMenu()`; `1` if you use only the other APIs. The host refuses to install extensions whose apiVersion is newer than its own.
 
 `repository` is optional: the extension's GitHub repository. The Details link on its card points here.
 
@@ -134,6 +134,7 @@ The fields follow T3's draft plugin format (the `plugin.json` in [#40222](https:
 | `host.chat.last()` | The thread state from the most recent chat view render (the provider list is available in Settings too) |
 | `host.agent` | Starts threads and sends messages with the agents you configured in T3; requires `"permissions": ["agent"]`. See "Putting agents to work" below |
 | `host.outputs.dir()`, `host.outputs.read(path)` | The extension's own output folder `<T3 data folder>/t3x-out/<id>/`. `dir()` returns the absolute path and creates the folder if needed; `read("job/sheet.png")` reads a file in it and returns `null` if it doesn't exist, otherwise `{ bytes, size, modified }`. Regular files only: no `..` in the path, symlinks are not followed, hard links are not read, and each file can be at most 32 MB. If the file's size changes while it is being read (it is still being written), `read` throws; read again later |
+| `host.server.call(name, data?)` | Calls a function this extension's background script registered with `t3x.handle(name, fn)` and returns its result; only extensions with a background script have it. See "Background extensions" below |
 | `host.lang()`, `host.useLang()` | The current UI language: `"zh"` when T3 is in Chinese, `"en"` for every other language. `useLang` is a React hook that re-renders when the language changes |
 | `host.t(chinese, english)` | Picks one by the current UI language; call it while rendering, after calling `host.useLang()` once in the component |
 | `host.onDispose(fn)` | Called when the extension is disabled |
@@ -179,7 +180,24 @@ export function activate(t3x) {
 | `id`, `version` | The extension's id and version |
 | `dataDir` | The extension's own data folder (not guaranteed to exist); deleted when the extension is uninstalled, kept when it is disabled or upgraded |
 | `log(...args)` | Writes to T3's backend log |
+| `lang()` | The current UI language, `"zh"` or `"en"` (same as `host.lang()`); after a switch, the next call returns the new value |
+| `handle(name, fn)` | Handles `host.server.call(name, data)` from the window: the value `fn(data)` returns (or resolves to) is the result, and if it throws, the window gets the same message. Returns a function that unregisters it; handlers are removed automatically when the extension is disabled |
 | `usage.registerSource({ driver, read })` | Takes over usage reading for a provider; only `antigravity` is supported for now. Once taken over, T3 no longer reads it its own way: if reading fails, or the enabled background extension didn't load, the panel shows why and doesn't fall back to T3's own reading. The result of `read(ctx)` appears in T3's native usage panel. `ctx`: `instanceId`, `profileDirectory` (T3's config folder for this instance), `authMethod`, `executablePath` (the CLI path T3 resolved), `environment`. Return `{ windows: [{ id, label, kind: "session"/"weekly"/"monthly"/"other", usedPercent, resetsAt?, windowDurationMins? }] }` and throw on errors (the message shows in the panel); no result within 60 seconds counts as a failure. Only one extension can take over a given provider |
+
+The window and the background script talk through `host.server.call` ↔ `t3x.handle`, so an extension can add its own settings, status and buttons without waiting for new host APIs:
+
+```js
+// server.mjs
+export function activate(t3x) {
+  let hidden = [];
+  t3x.handle("setHidden", (ids) => (hidden = ids));
+  t3x.handle("status", () => ({ hidden, lang: t3x.lang() }));
+}
+// web.js (in the settings panel)
+const status = await host.server.call("status");
+```
+
+Arguments and results must be JSON (arguments up to 256 KB, results up to 4 MB); no result within 50 seconds counts as a failure. The host fills in the extension id from the caller, so an extension can only reach its own background script. The channel is a local socket that T3's backend opens at `<T3 data folder>/t3x-server/rpc.sock`, in a folder only your user can enter.
 
 When a background extension is enabled, disabled or upgraded, the window hands its code to Electron's main process, which writes it to `<T3 data folder>/t3x-server/`; T3's backend notices the change and reloads it without a restart. Only a T3 backend started by this app loads them: when the official T3 Code opens the same data, background extensions don't run and T3 reads limits its own way as usual.
 

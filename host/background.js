@@ -37,12 +37,14 @@ async function syncServer() {
   // installed 列出所有装着的扩展（不只带后台的）：升级成纯界面版本时不删它的后台数据，只有卸载才删。
   const installed = [...new Set([...records.keys(), ...serverKeep])].sort();
   const running = [...records.values()].filter((r) => hasServer(r) && shouldRun(r));
-  const sig = JSON.stringify([installed, running.map(serverKey).sort()]);
+  const lang = isZh() ? "zh" : "en"; // 后台扩展的 t3x.lang()
+  const sig = JSON.stringify([installed, running.map(serverKey).sort(), lang]);
   if (sig === serverSent) return;
   serverSent = sig; // 失败了也不清：同一份内容不反复重试，集合变化时再发
   try {
     const result = await serverBridge.sync({
       installed,
+      lang,
       extensions: running.map((r) => ({ id: r.manifest.id, version: r.manifest.version, code: serverCode(r) })),
     });
     serverSha = Object.fromEntries((result?.extensions ?? []).map((e) => [e.id, e.sha256]));
@@ -53,6 +55,25 @@ async function syncServer() {
   }
   refreshServerStatus();
   bump();
+}
+
+if (serverBridge) subscribeLang(queueServerSync); // 切语言时告诉后台
+
+/** apiVersion 6：host.server.call(name, data) 调用扩展自己的后台用 t3x.handle 登记的函数；没有后台入口的扩展没有这个接口。 */
+function serverApi(rec, life) {
+  if (!hasServer(rec)) return undefined;
+  return Object.freeze({
+    async call(name, data) {
+      if (!life.alive) throw new Error(L("扩展已停用", "The extension is disabled"));
+      if (!serverBridge?.call) throw new Error(L("后台代码只能在 T3 Code Extensions 桌面版里运行", "Background code runs only in the T3 Code Extensions desktop app."));
+      try {
+        return await serverBridge.call(rec.manifest.id, name, data);
+      } catch (error) {
+        // ipcRenderer.invoke 会给主进程的错误加上前缀，扩展拿到的只留说明
+        throw new Error(String(error?.message ?? error).replace(/^Error invoking remote method '[^']*': (?:Error: )?(?:t3x: )?/, ""));
+      }
+    },
+  });
 }
 
 /** T3 后台发现目录变化后才加载，过一会儿再读几次状态。设置页打开时也调用。 */

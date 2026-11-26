@@ -154,4 +154,139 @@ module.exports = (test) => {
     const none = t3xCreateServerHost({ dir: undefined, log: quiet });
     assert.equal(await none.hasSource("antigravity"), false, "没有 T3X_SERVER_DIR（官方 app 启动的后台）时什么都不加载");
   });
+
+  test("调用通道（apiVersion 6）：主进程 → 后台 t3x.handle，界面语言，出错、停用和限制", async () => {
+    const { t3xCreateServerHost } = await import(path.join(ROOT, "host", "server.mjs"));
+    const dir = tmp("t3x-rpc-");
+    try {
+      const code = `export function activate(t3x) {
+        t3x.handle("echo", (data) => ({ data, lang: t3x.lang() }));
+        t3x.handle("boom", async () => { throw new Error("后台说不行"); });
+        t3x.handle("cyclic", () => { const a = {}; a.a = a; return a; });
+        t3x.handle("later", () => new Promise((r) => setTimeout(() => r("ok"), 50)));
+        const off = t3x.handle("gone", () => 1);
+        off();
+        assert(() => t3x.handle("bad name", () => 1));
+        function assert(fn) { try { fn(); } catch { return; } throw new Error("非法调用名没有被拒绝"); }
+      }`;
+      serverMain.sync(dir, { installed: ["a1", "b1"], lang: "zh", extensions: [{ id: "a1", version: "1.0.0", code }] });
+      const host = t3xCreateServerHost({ dir, log: quiet });
+      await host.start();
+      assert.equal(host.status().a1.state, "running", host.status().a1.error);
+      assert.deepEqual(await serverMain.call(dir, "a1", "echo", { n: [1, "二"] }), { data: { n: [1, "二"] }, lang: "zh" });
+      assert.deepEqual(await serverMain.call(dir, "a1", "echo"), { data: null, lang: "zh" }, "不带参数时是 null");
+      assert.equal(await serverMain.call(dir, "a1", "later"), "ok");
+      await assert.rejects(serverMain.call(dir, "a1", "boom"), /^Error: 后台说不行$/);
+      await assert.rejects(serverMain.call(dir, "a1", "cyclic"), /circular/i);
+      await assert.rejects(serverMain.call(dir, "a1", "gone"), /a1 没有登记 gone/);
+      await assert.rejects(serverMain.call(dir, "b1", "echo"), /后台扩展 b1 没有在运行/, "装了但没有后台在跑");
+      assert.throws(() => serverMain.call(dir, "../x", "echo"), /扩展 id 无效/);
+      assert.throws(() => serverMain.call(dir, "a1", "a b"), /调用名无效/);
+      assert.throws(() => serverMain.call(dir, "a1", "echo", { big: "x".repeat(256 << 10) }), /256 KB/);
+      assert.throws(() => serverMain.call(dir, "a1", "echo", { n: 1n }), /JSON/);
+      assert.throws(() => serverMain.call(dir, "a1", "echo", "汉".repeat(100 << 10)), /256 KB/, "按字节算：10 万个汉字约 300 KB");
+      assert.throws(() => serverMain.sync(dir, { installed: [], lang: "fr", extensions: [] }), /lang/);
+
+      // 切语言、换版本后马上调用（文件监视还没来得及重载）：按主进程写的索引先重载
+      serverMain.sync(dir, { installed: ["a1"], lang: "en", extensions: [{ id: "a1", version: "1.0.0", code }] });
+      assert.equal((await serverMain.call(dir, "a1", "echo")).lang, "en");
+      const v2 = code.replace('"echo"', '"echo2"');
+      serverMain.sync(dir, { installed: ["a1"], lang: "en", extensions: [{ id: "a1", version: "1.0.1", code: v2 }] });
+      assert.equal((await serverMain.call(dir, "a1", "echo2")).lang, "en");
+      // 停用后处理函数跟着撤掉
+      serverMain.sync(dir, { installed: ["a1"], lang: "en", extensions: [] });
+      await host.reload();
+      await assert.rejects(serverMain.call(dir, "a1", "echo"), /没有在运行/);
+      // 后台没起来（没有 socket）
+      fs.rmSync(path.join(dir, "rpc.sock"));
+      await assert.rejects(serverMain.call(dir, "a1", "echo"), /还没准备好/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("调用通道：socket 和目录的归属", async () => {
+    const net = require("node:net");
+    const { t3xCreateServerHost } = await import(path.join(ROOT, "host", "server.mjs"));
+    const errors = [];
+    const log = { info() {}, error: (...a) => errors.push(a.map(String).join(" ")) };
+    const code = `export function activate(t3x) { t3x.handle("who", () => "host"); }`;
+    const dir = tmp("t3x-own-");
+    try {
+      serverMain.sync(dir, { installed: ["a1"], extensions: [{ id: "a1", version: "1.0.0", code }] });
+      // 另一个后台正占着 socket：不抢，它退了再接手
+      const sock = path.join(dir, "rpc.sock");
+      const other = net.createServer((c) => c.end(`${JSON.stringify({ ok: true, result: "other" })}\n`));
+      await new Promise((r) => other.listen(sock, r));
+      const host = t3xCreateServerHost({ dir, log, rpcRetryMs: 50 });
+      await host.start();
+      assert.equal(host.status().a1.state, "running");
+      assert.equal(await serverMain.call(dir, "a1", "who"), "other", "活着的 socket 不能被摘走");
+      other.close(); // 不等 close 回调：探测连接被这边先断开时它可能迟迟不来
+      let got = null;
+      for (let i = 0; i < 40 && got !== "host"; i++) {
+        await new Promise((r) => setTimeout(r, 50));
+        got = await serverMain.call(dir, "a1", "who").catch(() => null);
+      }
+      assert.equal(got, "host", "原来的退了以后接手");
+      assert.equal(fs.statSync(sock).mode & 0o777, 0o600);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+
+    // 同名的普通文件不删；目录权限收紧
+    const dir2 = tmp("t3x-own2-");
+    try {
+      fs.chmodSync(dir2, 0o755);
+      fs.writeFileSync(path.join(dir2, "rpc.sock"), "keep");
+      await t3xCreateServerHost({ dir: dir2, log }).start();
+      assert.equal(fs.readFileSync(path.join(dir2, "rpc.sock"), "utf8"), "keep");
+      assert.match(errors.join("\n"), /不是 socket/);
+      assert.equal(fs.statSync(dir2).mode & 0o777, 0o700);
+    } finally {
+      fs.rmSync(dir2, { recursive: true, force: true });
+    }
+
+    // 目录是符号链接：什么都不加载
+    const real = tmp("t3x-real-");
+    const link = `${real}-link`;
+    try {
+      fs.symlinkSync(real, link);
+      serverMain.sync(real, { installed: ["a1"], extensions: [{ id: "a1", version: "1.0.0", code }] });
+      const host = t3xCreateServerHost({ dir: link, log });
+      await host.start();
+      assert.deepEqual(host.status(), {});
+      assert(!fs.existsSync(path.join(real, "rpc.sock")));
+      assert.match(errors.join("\n"), /不是自己的目录/);
+    } finally {
+      fs.rmSync(link, { force: true });
+      fs.rmSync(real, { recursive: true, force: true });
+    }
+  });
+
+  test("host.server（apiVersion 6）：按扩展 id 走主进程，去掉 IPC 前缀；没有后台入口、停用、桌面版以外报错", async () => {
+    const src = fs.readFileSync(path.join(ROOT, "host", "background.js"), "utf8");
+    const load = (bridge) =>
+      new Function("window", "t3xEntryList", "L", "subscribeLang", `${src}\nreturn serverApi;`)({ t3xServerBridge: { claim: () => bridge } }, pure.t3xEntryList, (zh) => zh, () => () => {});
+    const calls = [];
+    const bridge = {
+      async call(id, name, data) {
+        calls.push([id, name, data]);
+        if (name === "bad") throw new Error("Error invoking remote method 't3x:server:call': Error: t3x: T3 后台还没准备好，稍后再试");
+        if (name === "ext") throw new Error("Error invoking remote method 't3x:server:call': Error: 后台说不行");
+        return { ok: 1 };
+      },
+    };
+    const rec = (entries) => ({ manifest: { id: "agy-usage", entries } });
+    const life = { alive: true };
+    const api = load(bridge)(rec({ server: "server.mjs", web: "web.js" }), life);
+    assert.deepEqual(await api.call("status", { x: 1 }), { ok: 1 });
+    assert.deepEqual(calls, [["agy-usage", "status", { x: 1 }]]);
+    await assert.rejects(api.call("bad"), /^Error: T3 后台还没准备好，稍后再试$/);
+    await assert.rejects(api.call("ext"), /^Error: 后台说不行$/);
+    assert.equal(load(bridge)(rec({ web: "web.js" }), life), undefined, "没有后台入口就没有 host.server");
+    life.alive = false;
+    await assert.rejects(api.call("status"), /已停用/);
+    await assert.rejects(load(null)(rec({ server: "server.mjs" }), { alive: true }).call("status"), /桌面版/);
+  });
 };
