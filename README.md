@@ -1,3 +1,5 @@
+**简体中文** | [English](README.en.md)
+
 # T3 Code Extensions
 
 给 [T3 Code](https://github.com/pingdotgg/t3code) 加一个**扩展宿主**和**扩展市场**：设置导航里“外观”下面多出一个“扩展”页，可以开关、配置、从市场或链接安装扩展。
@@ -19,7 +21,7 @@
 |---|---|
 | 边缘光 [`t3x-edge-glow`](https://github.com/ZiHao256/t3x-edge-glow) | 需要审批（琥珀）、等你回答（蓝）、出错（红）、后台跑完（绿）时窗口边缘亮光。动效档位：省电 / 混合 / 30fps |
 | 推理强度滑条 [`t3x-effort-slider`](https://github.com/ZiHao256/t3x-effort-slider) | 把模型面板里“推理强度”的档位列表换成竖向分档滑条（最高档在上，档名写在刻度旁边），档位越高星点越亮越快，最高档流动星云。星点动效：跟随档位 / 静态 / 关闭 |
-| 桌宠 [`t3x-desk-pets`](https://github.com/ZiHao256/t3x-desk-pets) | 输入框上沿站着当前 agent 的像素宠物，跟会话状态动，上下文越满越胖，压缩历史时挤扁、压完弹回；子代理各派一只到旁边干活、收工击掌；每只都能单独拖，拖到另一只身上会互动；窗口不在前台或切到别的会话时错过的进出场，回来补播。右键宠物有菜单（T3 样式）：换一只、打个招呼、安静模式、桌宠设置、隐藏；隐藏后右键输入框里的模型选择器叫回。每个 agent 用哪只、宠物库（增删改）在设置里；也能选 harness、模型和会话，让 agent 照描述或参考图生成新宠物，预览每个动作、让它修改后再导入（用 `host.agent`）。内置 Codex、Clawd、Moffy 和鲸鱼娘 Dafeiyu（社区同人形象，出处和授权见扩展 README） |
+| 桌宠 [`t3x-desk-pets`](https://github.com/ZiHao256/t3x-desk-pets) | 输入框上沿站着当前 agent 的宠物，跟会话状态动，上下文越满越胖，压缩历史时挤扁、压完弹回；子代理各派一只到旁边干活、收工击掌；每只都能单独拖，拖到另一只身上会互动；窗口不在前台或切到别的会话时错过的进出场，回来补播。右键宠物有菜单（T3 样式）：换一只、打个招呼、安静模式、桌宠设置、隐藏；隐藏后右键输入框里的模型选择器叫回。每个 agent 用哪只、宠物库（增删改）在设置里；也能选 harness、模型和会话，让 agent 照描述或参考图生成新宠物，预览每个动作、让它修改后再导入（用 `host.agent`）。内置 Codex、Clawd、Moffy 和鲸鱼娘 Dafeiyu（社区同人形象，出处和授权见扩展 README） |
 | Antigravity 官方额度 [`t3x-agy-usage`](https://github.com/ZiHao256/t3x-agy-usage) | 额度面板里的 Antigravity 额度改由官方 CLI 的 `/usage` 读取：每个实例用自己的登录，不发消息、不耗 token，T3 不再自己读 token 去调 Google 的接口。后台扩展（见下文“后台扩展”） |
 
 ![“浏览”：GitHub 上带 t3code-extension 话题的社区扩展](docs/browse.png)
@@ -38,7 +40,7 @@
 
 ### 让 agent 安装
 
-把下面的提示词发给 Claude Code、Codex 等 coding agent（Paste this to a coding agent）：
+把下面的提示词发给 Claude Code、Codex 等 coding agent：
 
 ```text
 帮我在这台 Mac 上安装 T3 Code Extensions（https://github.com/ZiHao256/t3code-extensions）。
@@ -48,16 +50,6 @@
 4. 问我要“和官方版共用数据”还是“独立数据（--isolated，可以和官方版同时开）”。共用数据时先提醒我退出 T3 Code，等我确认后再运行 node install.cjs install（独立数据加 --isolated）。
 5. 运行 node install.cjs status，把输出给我，然后打开 ~/Applications/T3 Code Extensions.app。
 不要用 sudo，不要修改 /Applications 里的官方应用。
-```
-
-```text
-Install T3 Code Extensions (https://github.com/ZiHao256/t3code-extensions) on this Mac.
-1. Check the prerequisites: /Applications/T3 Code (Beta).app exists (read CFBundleShortVersionString from its Contents/Info.plist) and node -v is 22 or later.
-2. Pick the version from the table at the top of that README: T3 Code 0.1.12 uses the main branch, 0.1.11 uses the v0.1.0 tag. For any other version, stop and tell me.
-3. Clone the repository to ~/t3code-extensions (or update an existing checkout to that version) and run npm test there. If it fails, stop and show me the output.
-4. Ask me whether to share data with the official app or use separate data (--isolated, can run alongside the official app). For shared data, remind me to quit T3 Code first and wait for my confirmation, then run node install.cjs install (add --isolated for separate data).
-5. Run node install.cjs status, show me the output, then open ~/Applications/T3 Code Extensions.app.
-Do not use sudo and do not modify the official app in /Applications.
 ```
 
 ### 手动安装
@@ -242,7 +234,7 @@ SHA-256 只保证下载到的就是注册表写的那份，**不代表代码安�
 - 依赖 0.1.12 压缩代码里的变量名，T3 一更新就要重新适配（扩展不用改，只改这个仓库）；补丁前会核对原始文件哈希，对不上直接拒绝安装，不会装出一个坏掉的应用。
 - 本机 ad-hoc 签名，没有官方签名和公证，也没有 Hardened Runtime：官方的 entitlements 依赖官方描述文件，ad-hoc 签名带上它们反而启动不了。
 - `--isolated` 副本和官方版注册的是同一个 `t3code://` 链接。两者同时开着时，T3 Connect 等网页登录的回调可能被另一个应用接走，这时先关掉另一个再登录。
-- T3 官方正在做插件系统（实验 PR，尚未合并）。合并后计划把三个扩展迁成官方插件，这个宿主就可以退役。
+- T3 官方正在做插件系统（实验 PR，尚未合并）。合并后计划把这些扩展迁成官方插件，这个宿主就可以退役。
 
 ## 开发
 
