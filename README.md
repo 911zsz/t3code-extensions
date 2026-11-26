@@ -132,7 +132,7 @@ my-ext/
 | `host.React`、`host.h` | T3 自己的 React 和 `createElement` |
 | `host.register(slot, Component)` | 挂到挂载点，返回取消函数 |
 | `host.settings(Component)` | 扩展设置面板；props 里的 `ui` 是 T3 原生的 `Section` / `Row` / `Switch` / `Button` / `Input` / `Select` / `SelectTrigger` / `SelectValue` / `SelectPopup` / `SelectItem` |
-| `host.storage.get/set/subscribe/use(key, fallback)` | 扩展自己的持久化存储（IndexedDB），`use` 是 React hook |
+| `host.storage.get/set/subscribe/use(key, fallback)` | 扩展自己的持久化存储（IndexedDB），`use` 是 React hook。扩展停用后（包括重载、升级、卸载时还没回来的异步操作）`set` 会被拒绝 |
 | `host.files.list/text/url(path)` | 扩展包里的文件；`url` 给素材的 data URL |
 | `host.style(css)` | 追加样式，停用时自动移除 |
 | `host.openSettings()` | 跳到 设置 → 扩展，打开本扩展的设置 |
@@ -141,7 +141,7 @@ my-ext/
 | `host.dom.composer()`、`host.dom.modelPicker(target)` | 主聊天视图的输入框外壳；`target` 在主输入框的模型选择器里时返回那个选择器（side chat 里的都不算），否则 `null`。需要找 T3 页面元素时用这里，别自己查 T3 的 DOM：T3 改版时宿主跟着改，扩展不用动 |
 | `host.chat.last()` | 最近一次聊天视图的会话状态（设置页里也能拿到 provider 列表） |
 | `host.agent` | 用你在 T3 里配置的 agent 开会话、发消息，要声明 `"permissions": ["agent"]`，见下文“让 agent 干活” |
-| `host.outputs.dir()`、`host.outputs.read(path)` | 扩展自己的输出目录 `<T3 数据目录>/t3x-out/<id>/`：`dir()` 返回绝对路径（不存在就建），`read("job/sheet.png")` 读里面的文件，不存在是 `null`，否则 `{ bytes, size, modified }`。只读普通文件，路径不能含 `..`、不跟随符号链接，单个文件最大 32 MB；读的时候文件大小变了（还在写）会抛错，稍后再读 |
+| `host.outputs.dir()`、`host.outputs.read(path)` | 扩展自己的输出目录 `<T3 数据目录>/t3x-out/<id>/`：`dir()` 返回绝对路径（不存在就建），`read("job/sheet.png")` 读里面的文件，不存在是 `null`，否则 `{ bytes, size, modified }`。只读普通文件，路径不能含 `..`、不跟随符号链接、不读硬链接，单个文件最大 32 MB；读的时候文件大小变了（还在写）会抛错，稍后再读 |
 | `host.lang()`、`host.useLang()` | 当前界面语言：T3 是中文时为 `"zh"`，其他语言都是 `"en"`。`useLang` 是 React hook，切语言时触发重绘 |
 | `host.t(中文, 英文)` | 按当前界面语言二选一；在渲染时调用，组件里先调一次 `host.useLang()` |
 | `host.onDispose(fn)` | 停用时调用 |

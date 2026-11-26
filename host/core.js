@@ -306,7 +306,13 @@ function makeApi(rec, life) {
     dom,
     storage: {
       get: (key, fallback) => store.get(own(key), fallback),
-      set: (key, value) => store.set(own(key), value),
+      set: (key, value) => {
+        if (life.alive) return store.set(own(key), value);
+        // 停用后的旧实例（重载、升级、卸载时还没回来的请求）不能再写：会盖掉新实例的数据，或者写回卸载时清掉的键
+        const stale = Promise.reject(new Error(L("扩展已停用", "The extension is disabled")));
+        stale.catch(() => {}); // 只给等它的调用方看
+        return stale;
+      },
       subscribe: (key, fn) => track(store.subscribe(own(key), fn)),
       use: (key, fallback) => useStored(own(key), fallback),
     },

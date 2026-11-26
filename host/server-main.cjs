@@ -80,8 +80,9 @@ const t3xServerMain = (() => {
 
   // apiVersion 5 的输出目录：<T3 数据目录>/t3x-out/<扩展 id>/。扩展让 agent 把生成的文件写到这里，再经主进程读回窗口。
   // 只读这个目录里面的普通文件：路径逐段检查，不跟随符号链接，不能用 . / .. 跳出去。
-  // 防的是 agent 按扩展给的路径写文件时写错、写成链接；不防能并发改 T3 数据目录的本机进程（换中间目录、建硬链接）：
-  // 它能直接改 t3x-server/index.json 让 T3 后台执行任意代码，这里再防也挡不住。
+  // 防的是 agent 按扩展给的路径写文件时写错、写成链接（符号链接、硬链接）。
+  // shortcut: 检查和打开之间把中间目录换成链接的竞态不防（Node 没有 openat，要逐级持目录句柄）；只能写输出目录、
+  // 自己又读不到目标文件的写入方才用得上它，要支持这种受限写入方时再改成逐级打开。
   const OUT_PART_RE = /^\w[\w.-]{0,99}$/;
   const OUT_MAX = 32 << 20;
   const outputRoot = (serverDirPath) => path.join(path.dirname(serverDirPath), "t3x-out");
@@ -133,13 +134,15 @@ const t3xServerMain = (() => {
       const st = fs.fstatSync(fd);
       const same = (a) => a && a.dev === st.dev && a.ino === st.ino;
       if (!st.isFile() || !same(before)) fail(`${name} 在读的时候被换掉了`);
+      if (st.nlink > 1) fail(`${name} 是硬链接，不读`);
       if (st.size > OUT_MAX) fail(`${name} 超过 32 MB`);
       const buf = Buffer.alloc(st.size + 1);
       let got = 0;
       for (let n; got < buf.length && (n = fs.readSync(fd, buf, got, buf.length - got, null)) > 0; ) got += n;
-      // 读的时候大小变了就是还在写：报错让调用方稍后再读，不返回截断的内容
-      if (got !== st.size) fail(`${name} 还在写，稍后再读`);
-      if (!same(walkOutput(root, segs))) fail(`${name} 在读的时候被换掉了`);
+      const after = walkOutput(root, segs);
+      if (!same(after)) fail(`${name} 在读的时候被换掉了`);
+      // 读的时候或读完以后大小变了就是还在写：报错让调用方稍后再读，不返回截断的内容
+      if (got !== st.size || after.size !== got) fail(`${name} 还在写，稍后再读`);
       return { bytes: buf.subarray(0, got), size: got, modified: st.mtimeMs };
     } finally {
       fs.closeSync(fd);

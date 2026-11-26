@@ -94,6 +94,18 @@ module.exports = (test) => {
         fs.readSync = readSync;
       }
       assert.equal(serverMain.readOutput(root, "pets", "sheet.png").size, 2, "写完了就能读");
+      // 读到文件末尾以后、最后一次检查之前又写了：也算还在写
+      let atEof = true;
+      fs.readSync = (...args) => {
+        const n = readSync(...args);
+        if (n === 0 && atEof) (atEof = false), fs.appendFileSync(file, "MORE");
+        return n;
+      };
+      assert.throws(() => serverMain.readOutput(root, "pets", "sheet.png"), /还在写/, "读完后变长");
+      fs.readSync = readSync;
+      // 硬链接可能指向输出目录外的文件
+      fs.linkSync(file, path.join(base, "outside.png"));
+      assert.throws(() => serverMain.readOutput(root, "pets", "sheet.png"), /硬链接/);
     } finally {
       fs.readSync = readSync;
       fs.rmSync(base, { recursive: true, force: true });
