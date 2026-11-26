@@ -57,6 +57,22 @@ async function loadSearch(q) {
     .filter((r) => t3xParseGithub(`https://github.com/${r.owner}/${r.repo}`));
 }
 
+const repoMetaCache = new Map(); // "owner/repo" -> Promise<{ description, locales } | null>
+
+/** 社区卡片的简介跟着界面语言：读仓库默认分支的 plugin.json（每个仓库读一次），读不到返回 null，卡片退回 GitHub 的仓库简介。 */
+function repoMeta({ owner, repo }) {
+  const key = `${owner}/${repo}`.toLowerCase();
+  if (!repoMetaCache.has(key)) {
+    const pick = (o) => (typeof o?.description === "string" && o.description.trim() ? { description: o.description.slice(0, 300) } : {});
+    const meta = fetchBytes(t3xRawUrl({ owner, repo }, "HEAD", "plugin.json"), LIMITS.index)
+      .then((bytes) => JSON.parse(new TextDecoder().decode(bytes)))
+      .then((m) => ({ ...pick(m), locales: { zh: pick(m?.locales?.zh), en: pick(m?.locales?.en) } }))
+      .catch(() => null);
+    repoMetaCache.set(key, meta);
+  }
+  return repoMetaCache.get(key);
+}
+
 /**
  * 找要装的提交：地址里指定了分支或标签就用它，否则用最新 Release，没有 Release 用默认分支。
  * 同时取仓库 ID：仓库改名或旧名被别人占用时，检查更新靠它认出不是原来那个仓库。

@@ -308,6 +308,31 @@ test("GitHub 仓库地址解析", () => {
   assert.equal(pure.t3xRawUrl({ owner: "a", repo: "b", path: "pkg" }, "f".repeat(40), "plugin.json"), `https://raw.githubusercontent.com/a/b/${"f".repeat(40)}/pkg/plugin.json`);
 });
 
+test("社区卡片：从仓库的 plugin.json 取各语言简介（模拟网络）", async () => {
+  const src = ["pure.js", "install.js", "github.js"].map((f) => fs.readFileSync(path.join(__dirname, "..", "host", f), "utf8").split("// @node-only")[0]).join("\n");
+  const urls = [];
+  const resp = (status, body) => ({
+    ok: status < 400, status, url: "", headers: new Headers(),
+    body: new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(typeof body === "string" ? body : JSON.stringify(body))); c.close(); } }),
+  });
+  const fetch = async (u) => {
+    const url = String(u);
+    urls.push(url);
+    if (url.toLowerCase().includes("/ow/pets/")) return resp(200, { description: "桌宠", locales: { en: { description: "Desk pets", name: "x" }, zh: { description: "  " } }, entries: {} });
+    if (url.includes("/ow/broken/")) return resp(200, "not json");
+    return resp(404, {});
+  };
+  const ctx = vm.createContext({ fetch, Headers, ReadableStream, TextDecoder, TextEncoder, URL, Date, crypto, console });
+  vm.runInContext(`${src}\nthis.repoMeta = repoMeta;`, ctx);
+  const meta = await ctx.repoMeta({ owner: "Ow", repo: "pets" });
+  assert.equal(urls[0], "https://raw.githubusercontent.com/Ow/pets/HEAD/plugin.json");
+  assert.deepEqual(JSON.parse(JSON.stringify(meta)), { description: "桌宠", locales: { zh: {}, en: { description: "Desk pets" } } }, "只留简介，空白的不要");
+  await ctx.repoMeta({ owner: "ow", repo: "PETS" });
+  assert.equal(urls.length, 1, "同一个仓库只读一次");
+  assert.equal(await ctx.repoMeta({ owner: "ow", repo: "broken" }), null);
+  assert.equal(await ctx.repoMeta({ owner: "ow", repo: "missing" }), null);
+});
+
 test("GitHub 来源：ref 限制、仓库 ID、限流提示（模拟网络）", async () => {
   const src = ["pure.js", "install.js", "github.js"].map((f) => fs.readFileSync(path.join(__dirname, "..", "host", f), "utf8").split("// @node-only")[0]).join("\n");
   let repoId = 7;

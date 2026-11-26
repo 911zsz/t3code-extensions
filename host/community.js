@@ -105,6 +105,15 @@ const githubInstalled = (item) =>
 
 function CommunityCard({ ui, item, busy, installing, onInstall }) {
   const installed = githubInstalled(item);
+  const [meta, setMeta] = React.useState(null);
+  React.useEffect(() => {
+    let live = true;
+    repoMeta(item).then((m) => live && setMeta(m));
+    return () => {
+      live = false;
+    };
+  }, [item.owner, item.repo]);
+  const description = (meta && localized(meta, "description")) || item.description;
   const license = item.license && item.license !== "NOASSERTION" ? item.license : "";
   const updated = item.updated ? item.updated.slice(0, 10) : "";
   const repoUrl = `https://github.com/${item.owner}/${item.repo}`;
@@ -145,10 +154,10 @@ function CommunityCard({ ui, item, busy, installing, onInstall }) {
     h(
       "p",
       {
-        className: item.description ? "t3x-card-desc" : "t3x-card-desc t3x-card-desc-empty",
-        title: item.description || undefined,
+        className: description ? "t3x-card-desc" : "t3x-card-desc t3x-card-desc-empty",
+        title: description || undefined,
       },
-      item.description || L("暂无简介", "No description"),
+      description || L("暂无简介", "No description"),
     ),
     h(
       "div",
@@ -242,7 +251,10 @@ function CommunityMarket({ ui, filterQuery = "", submitSeq = 0, submittedQuery =
   const search = (raw, { force = false } = {}) => {
     const q = String(raw ?? "").trim();
     const id = ++reqIdRef.current;
-    if (force && typeof searchCache !== "undefined") searchCache.delete(q);
+    if (force && typeof searchCache !== "undefined") {
+      searchCache.delete(q);
+      repoMetaCache.clear();
+    }
     setActiveQuery(q);
     setState((s) => ({ ...s, loading: true, error: null }));
     searchGithub(q).then(
