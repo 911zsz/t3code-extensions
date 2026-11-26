@@ -266,6 +266,10 @@ node lib/build.cjs     # 重新生成 registry/index.json
 
 改宿主接口：先在本仓库加接口、提高 `host/pure.js` 的 `API_VERSION` 并发布，再让用到新接口的扩展把 `apiVersion` 改成新值。
 
+## 社区
+
+本项目积极参与并认可 [LINUX DO 社区](https://linux.do)。
+
 ## 许可
 
 MIT。T3 Code 是 T3 Tools Inc. 的项目；本仓库不分发 T3 Code（安装时复制你本机的官方版），只在 `lib/patch.cjs` 里留了几段用于定位的压缩代码片段。

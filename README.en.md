@@ -266,6 +266,10 @@ This repository contains only the host (patches, the `host` API, the settings pa
 
 To change the host API, add the API here first, bump `API_VERSION` in `host/pure.js` and release, then have the extensions that use the new API set `apiVersion` to the new value.
 
+## Community
+
+This project takes part in and recognizes the [LINUX DO community](https://linux.do).
+
 ## License
 
 MIT. T3 Code is a project of T3 Tools Inc. This repository doesn't distribute T3 Code (installation copies your local official app); it only keeps a few minified code snippets in `lib/patch.cjs` to locate the patch points.
