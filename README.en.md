@@ -63,6 +63,10 @@ node install.cjs uninstall           # quit the app first
 
 The installed app is `~/Applications/T3 Code Extensions.app`. Installation verifies the official signature → copies the app → patches it (each target file is checked against the original 0.1.12 hash first, and `node --check` checks the syntax after patching) → updates the asar integrity values → re-signs it locally. Auto-update is turned off, because it would replace the patched files.
 
+**Updating T3 Code Extensions**: T3's own auto-update is replaced by this repository's. About 10 seconds after launch it checks the latest Release once (one GitHub API call, plus one more when there's a new version) and tells you when there's a new version; click "Update" at the top of Settings → Extensions:
+- The new version downloads inside the app. If the official app in Applications isn't the T3 version the new release targets, that version's official package (about 230 MB) is downloaded too, its official signature is verified, and it replaces the official app. If the official app is running, is newer, or macOS blocks the change (you may see "prevented from modifying apps"; allow it under System Settings → Privacy & Security → App Management), it's left alone and the downloaded package is used for the install.
+- Once downloaded, the app quits, reinstalls the same way as before (with or without `--isolated`) and reopens; the result is shown on the next launch. If the install fails you keep the previous version. The log is at `~/Library/Caches/t3code-extensions/update.log`.
+
 **Upgrading from an older version with bundled extensions**: quit the app, run `node install.cjs uninstall`, then `install` again (with `--isolated` if you used it; uninstalling keeps your data). Edge glow, Effort slider and Desk pets no longer ship with the host:
 - If you installed a newer version with "Check for updates" before, it is still under Installed; click Refresh to update it if it is out of date.
 - Reinstall the others from Browse. Their settings and data are still there (don't click Remove first: removing deletes the data).
@@ -81,7 +85,7 @@ Settings → Extensions:
   - You can also enter a GitHub repository URL, a `plugin.json` link or a third-party marketplace's `index.json` link, or upload a zip.
   - Every install asks you to confirm the source first.
 - **Add local extension**: pick an extension folder; after changing the code, click refresh on its card to re-read it (for development; environments that can't remember folders fall back to a one-time import).
-- **Refresh**: checks every updatable extension in turn and refreshes the community list. Nothing is checked automatically when the page opens: without signing in to GitHub, each outgoing IP gets only 60 API calls per hour (one check uses about 3) and about 10 searches per minute. Shared proxy exits are often used up by others; in that case you'll see when the limit resets.
+- **Refresh**: checks every updatable extension and T3 Code Extensions itself for updates, and refreshes the community list. Nothing is checked automatically when the page opens: without signing in to GitHub, each outgoing IP gets only 60 API calls per hour (one check uses about 3) and about 10 searches per minute. Shared proxy exits are often used up by others; in that case you'll see when the limit resets.
 
 ## Writing extensions
 
@@ -155,7 +159,7 @@ Extensions that declare `"apiVersion": 5` and `"permissions": ["agent"]` can use
 | `host.agent` | Description |
 |---|---|
 | `providers()` | Harnesses (T3 provider instances): `{ instanceId, driver, name, enabled, status, runtimeModes, models: [{ id, name, isDefault }] }` |
-| `useThreads()` | React hook; the visible threads: `{ environmentId, threadId, projectId, title, instanceId, model, runtimeMode, interactionMode, running, lastError, lastRunCompletedAt, archived }` |
+| `useThreads()` | React hook; the visible threads: `{ environmentId, threadId, projectId, title, instanceId, model, runtimeMode, interactionMode, running, lastError, lastRunCompletedAt, archived, needs }`; `needs` is what the thread is waiting on you for: `"approval"`, `"input"` or `null` (host 0.5.0 and later) |
 | `useProjects()` | React hook; projects: `{ environmentId, projectId, title, scratch }`, where `scratch` is "No project" |
 | `useSend()` | React hook that returns `send(req)`. `req.target` is `{ threadId }` (an existing thread: it keeps its own harness and runtime mode and is queued after the running turn) or `{ newThread: { projectId, title } }`. The other fields are `instanceId`, `model`, `runtimeMode` (`approval-required` / `auto-accept-edits` / `auto` / `full-access`; for new threads, and it must be in the harness's `runtimeModes`), `text`, and `images?: [{ name, dataUrl }]` (PNG / JPEG / WebP / GIF, up to 8, 10 MB each). Returns `Promise<{ environmentId, threadId }>`; throws if T3 doesn't accept it, the environment changed after rendering, or the extension is disabled |
 | `open({ environmentId, threadId })` | Navigates to the thread |

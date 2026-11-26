@@ -217,6 +217,8 @@ if (officialVersion === T3_VERSION) {
         const imported = [...appearance.matchAll(new RegExp(`import\\{([^}]*)\\}from"\\./${src}"`, "g"))].flatMap((m) => m[1].split(","));
         for (const n of names) assert(imported.includes(n), `外观页没有从 ${file}* 导入 ${n}`);
       }
+      // showToast 用确认框模块的导出 i：要和外观页当 toast 管理器（ct）导入的是同一个文件
+      assert(new RegExp(`import\\{[^}]*\\bi as ct\\b[^}]*\\}from"\\./${confirmName}"`).test(appearance), "toast 管理器不是确认框模块的导出 i");
       // 聊天补丁：working / awaiting 和 T3 传给原生时间线的是同一个东西（变量名写错时语法照样通过，扩展会拿到别的值）
       const { chatPatch } = require("../lib/patch.cjs");
       const chatSrc = before.read(findOne(before, chatPatch.targetRegex, chatPatch.label)).toString("utf8");
@@ -235,7 +237,7 @@ if (officialVersion === T3_VERSION) {
       assert(driver.length > 0 && driver.length < 20000, "Antigravity driver 的范围变了");
       for (const decl of ["const usage = yield* makeAntigravityUsageProbe({", "installation.resolve(settings.binaryPath, processEnvironment)", "auth.authMethod"]) assert(driver.includes(decl), `Antigravity driver 里没有 ${decl}`);
       // 宿主运行时绑定的 React / jsx / 档位选项函数，要是这个模块顶层真有的名字（未声明的名字到启动时才报 ReferenceError）
-      const bind = /\}\)\(\{React:([\w$]+),jsx:([\w$]+),choices:([\w$]+),agent:\{commands:([\w$]+),useCommand:([\w$]+),useThreads:([\w$]+),useProjects:([\w$]+)\}\}/.exec(runtime());
+      const bind = /\}\)\(\{React:([\w$]+),jsx:([\w$]+),choices:([\w$]+),agent:\{commands:([\w$]+),useCommand:([\w$]+),useThreads:([\w$]+),useProjects:([\w$]+)\},version:"[\d.]+"\}/.exec(runtime());
       assert(bind, "找不到宿主运行时的 bind");
       for (const name of bind.slice(1)) {
         const n = name.replace(/\$/g, "\\$");
@@ -459,6 +461,7 @@ test("zip 解包：存储和 deflate、外壳目录、大小上限", async () =>
 
 require("./server-tests.cjs")(test);
 require("./agent-tests.cjs")(test);
+require("./update-tests.cjs")(test);
 
 // 某个测试的 Promise 永远不结束时事件循环会排空，进程照样以 0 退出：没跑完就算失败
 process.on("exit", (code) => {

@@ -198,6 +198,15 @@ function t3xParseGithub(raw) {
   }
 }
 
+/** a 是不是比 b 新：只认 x.y.z 这种纯数字版本，认不出的都不算新。 */
+function t3xNewerVersion(a, b) {
+  const parse = (v) => (typeof v === "string" && /^\d{1,9}\.\d{1,9}\.\d{1,9}$/.test(v) ? v.split(".").map(Number) : null);
+  const [x, y] = [parse(a), parse(b)];
+  if (!x || !y) return false;
+  const i = x.findIndex((n, k) => n !== y[k]);
+  return i >= 0 && x[i] > y[i];
+}
+
 /** 固定到某个提交的文件地址：内容永远不会再变。 */
 const t3xRawUrl = ({ owner, repo, path }, sha, file) => `https://raw.githubusercontent.com/${owner}/${repo}/${sha}/${path ? `${path}/` : ""}${file}`;
 
@@ -307,4 +316,4 @@ async function t3xUnzip(bytes, { maxFile = 5 << 20, maxTotal = 20 << 20, maxEntr
 }
 
 // @node-only
-if (typeof module === "object") module.exports = { t3xScopeKeys, t3xEnabledAt, t3xLocalesError, t3xEntryList, t3xCheckManifest, t3xCheckRegistry, t3xEffortModel, t3xParseGithub, t3xRawUrl, t3xUnzip, GITHUB_TOPIC, SLOTS, API_VERSION, SERVER_API_VERSION, AGENT_API_VERSION };
+if (typeof module === "object") module.exports = { t3xScopeKeys, t3xEnabledAt, t3xLocalesError, t3xEntryList, t3xCheckManifest, t3xCheckRegistry, t3xEffortModel, t3xParseGithub, t3xRawUrl, t3xNewerVersion, t3xUnzip, GITHUB_TOPIC, SLOTS, API_VERSION, SERVER_API_VERSION, AGENT_API_VERSION };

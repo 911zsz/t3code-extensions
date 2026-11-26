@@ -243,6 +243,11 @@ function showConfirm(message, options) {
   confirmModule ??= import(CONFIRM_MODULE);
   return confirmModule.then(async (m) => (await m.D(message, options)) ?? false); // 确认框没挂载时 T3 也当作取消
 }
+/** T3 的 toast 管理器（同一个模块的导出 i），设置页以外也能用，比如启动时报告宿主更新的结果。 */
+function showToast(toast) {
+  confirmModule ??= import(CONFIRM_MODULE);
+  return confirmModule.then((m) => m.i.add(toast));
+}
 
 // 扩展要求打开自己的设置（比如桌宠右键菜单）：跳到 设置 → 扩展，设置页挂载时或已挂载时取走这个 id。
 let settingsRequest = null;

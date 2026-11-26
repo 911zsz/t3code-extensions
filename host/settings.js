@@ -202,6 +202,7 @@ function ExtensionsPage({ ui, scope }) {
   const handleRefreshAll = async () => {
     if (refreshing || !ready) return;
     setRefreshing(true);
+    const hostCheck = checkHostUpdate(); // 宿主自己的新版显示在顶部提示条里（self-update.js）
     if (typeof searchCache !== "undefined") searchCache.clear();
     setBrowseRefreshSeq((n) => n + 1);
     if (activeTab === "browse") {
@@ -232,6 +233,8 @@ function ExtensionsPage({ ui, scope }) {
       } else if (checked.length > 0) {
         setMessage({ kind: "ok", text: L("所有扩展均已是最新版本", "All extensions are up to date") });
       }
+      const host = await hostCheck;
+      if (host.state === "error") setMessage({ kind: "error", text: L(`检查 T3 Code Extensions 的新版失败：${host.error}`, `Couldn’t check for a new T3 Code Extensions: ${host.error}`) });
     } finally {
       setRefreshing(false);
     }
@@ -363,6 +366,7 @@ function ExtensionsPage({ ui, scope }) {
       ),
     ),
 
+    h(HostUpdateBanner, { ui }),
     storageAlert,
 
     // 全宽搜索框

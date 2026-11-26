@@ -291,6 +291,7 @@ async function uninstall(id) {
 
 function boot() {
   if (typeof document === "undefined") return;
+  bootHostUpdate(); // self-update.js
   loadStore()
     .catch((error) => {
       persistent = false;

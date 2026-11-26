@@ -63,6 +63,10 @@ node install.cjs uninstall           # 先退出应用
 
 装好的应用在 `~/Applications/T3 Code Extensions.app`。安装过程：校验官方签名 → 复制 → 打补丁（每个目标文件先核对 0.1.12 的原始哈希，补丁后用 `node --check` 检查语法）→ 更新 asar 完整性值 → 本机重新签名。自动更新会被关掉（否则会换掉打过补丁的文件）。
 
+**更新 T3 Code Extensions**：T3 自己的自动更新关掉了，换成本仓库的更新。启动约 10 秒后查一次最新 Release（1 次 GitHub 接口，有新版时再多 1 次），有新版就提示，到 设置 → 扩展 顶部点“更新”：
+- 在 app 里下载新版；「应用程序」里的官方版不是新版针对的 T3 版本时，还会下载那个版本的官方安装包（约 230 MB），校验官方签名后替换官方版。官方版正在运行、比它还新，或者 macOS 不让改（可能弹“已阻止修改 App”，可在 系统设置 → 隐私与安全性 → App 管理 里允许）时不替换，直接用下载的包安装；
+- 下载完 app 退出，按原来的方式（有没有 `--isolated`）重装并重新打开，下次启动时提示结果；没装成就还是原来的版本。日志在 `~/Library/Caches/t3code-extensions/update.log`。
+
 **从带内置扩展的旧版升级**：退出应用，`node install.cjs uninstall` 后重新 `install`（原来用 `--isolated` 的照样加上；卸载不删数据）。边缘光、推理强度滑条、桌宠不再随宿主分发：
 - 以前点“检查更新”装过新版的，还在“已安装”里，版本旧的话点刷新更新；
 - 其余的到“浏览”里重新安装，原来的设置和数据还在（别先点“移除”，移除会删掉数据）；
@@ -81,7 +85,7 @@ node install.cjs uninstall           # 先退出应用
   - 也可以填 GitHub 仓库地址、`plugin.json` 链接或第三方市场的 `index.json` 链接，或者上传 zip。
   - 安装前都会弹窗确认来源。
 - **添加本地扩展**：选一个扩展文件夹，之后改了代码点卡片上的刷新就重新读取（开发用；不支持记住文件夹的环境退回一次性导入）。
-- **刷新**：依次检查所有能更新的扩展，并刷新社区列表。打开页面时不自动检查：不登录 GitHub 时，每个出口 IP 每小时只能调 60 次接口（检查一次约 3 次），搜索每分钟约 10 次；共用的代理出口常被别人用光，这时会提示多久后恢复。
+- **刷新**：依次检查所有能更新的扩展和 T3 Code Extensions 自己的新版，并刷新社区列表。打开页面时不自动检查：不登录 GitHub 时，每个出口 IP 每小时只能调 60 次接口（检查一次约 3 次），搜索每分钟约 10 次；共用的代理出口常被别人用光，这时会提示多久后恢复。
 
 ## 写扩展
 
@@ -155,7 +159,7 @@ my-ext/
 | `host.agent` | 说明 |
 |---|---|
 | `providers()` | harness（T3 的 provider 实例）：`{ instanceId, driver, name, enabled, status, runtimeModes, models: [{ id, name, isDefault }] }` |
-| `useThreads()` | React hook，能看到的会话：`{ environmentId, threadId, projectId, title, instanceId, model, runtimeMode, interactionMode, running, lastError, lastRunCompletedAt, archived }` |
+| `useThreads()` | React hook，能看到的会话：`{ environmentId, threadId, projectId, title, instanceId, model, runtimeMode, interactionMode, running, lastError, lastRunCompletedAt, archived, needs }`；`needs` 是会话在等你什么：`"approval"`（批准）、`"input"`（回答）或 `null`，宿主 0.5.0 起才有 |
 | `useProjects()` | React hook，项目：`{ environmentId, projectId, title, scratch }`，`scratch` 是“无项目” |
 | `useSend()` | React hook，返回 `send(req)`：`req.target` 是 `{ threadId }`（已有会话，用它自己的 harness 和运行模式，排在正在跑的那轮后面）或 `{ newThread: { projectId, title } }`；另有 `instanceId`、`model`、`runtimeMode`（`approval-required` / `auto-accept-edits` / `auto` / `full-access`，新会话用，要在这个 harness 的 `runtimeModes` 里）、`text`、`images?: [{ name, dataUrl }]`（PNG / JPEG / WebP / GIF，最多 8 张、每张 10 MB）。返回 `Promise<{ environmentId, threadId }>`，T3 不接受、渲染后切了环境或扩展已停用时抛错 |
 | `open({ environmentId, threadId })` | 跳到这个会话 |

@@ -213,15 +213,16 @@ const t3xServerMain = (() => {
     }
   }
 
+  // 和 T3 自己的 isMainFrameEvent 一样：只认窗口主框架发来的请求。update-main.cjs 也用它。
+  const trusted = ({ sender, senderFrame }) => sender.getType() === "window" && Boolean(senderFrame) && senderFrame === sender.mainFrame;
+  const guard = (fn) => (event, ...args) => {
+    if (!trusted(event)) fail("只接受主窗口的请求");
+    return fn(...args);
+  };
+
   function install(electron) {
     const dir = serverDir(process.env, os.homedir(), !electron.app.isPackaged);
     process.env.T3X_SERVER_DIR = dir;
-    // 和 T3 自己的 isMainFrameEvent 一样：只认窗口主框架发来的请求。
-    const trusted = ({ sender, senderFrame }) => sender.getType() === "window" && Boolean(senderFrame) && senderFrame === sender.mainFrame;
-    const guard = (fn) => (event, ...args) => {
-      if (!trusted(event)) fail("只接受主窗口的请求");
-      return fn(...args);
-    };
     electron.ipcMain.handle("t3x:server:sync", guard((payload) => sync(dir, payload)));
     electron.ipcMain.handle("t3x:server:status", guard(() => status(dir)));
     const out = outputRoot(dir);
@@ -230,7 +231,7 @@ const t3xServerMain = (() => {
     electron.ipcMain.handle("t3x:server:call", guard((id, name, data) => call(dir, id, name, data)));
   }
 
-  return { serverDir, sync, status, outputRoot, outputDir, readOutput, call, install };
+  return { serverDir, sync, status, outputRoot, outputDir, readOutput, call, guard, install };
 })();
 if (process.versions.electron && process.type === "browser") t3xServerMain.install(require("electron"));
 // @node-only

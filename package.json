@@ -1,6 +1,7 @@
 {
   "name": "t3-extensions",
-  "version": "0.4.0",
+  "version": "0.5.0",
+  "t3Version": "0.1.12",
   "private": true,
   "description": "T3 Code 扩展宿主与扩展市场（非官方，macOS）",
   "license": "MIT",
