@@ -24,8 +24,11 @@ test("plugin.json 校验", () => {
   const ok = { id: "demo", apiVersion: 1, name: "Demo", version: "1.0.0", entries: { web: "web.js" } };
   assert.deepEqual(pure.t3xCheckManifest(ok, { "web.js": "" }).web, ["web.js"]);
   assert.throws(() => pure.t3xCheckManifest({ ...ok, id: "Bad Id" }), /id/);
-  for (const apiVersion of [0, 5, 2.5, "2"]) assert.throws(() => pure.t3xCheckManifest({ ...ok, apiVersion }), /apiVersion/, String(apiVersion));
-  for (const apiVersion of [2, 3, 4]) pure.t3xCheckManifest({ ...ok, apiVersion }, { "web.js": "" }); // 2 加了 Input / Select、openSettings、contextMenu；3 加了 dom、confirm；4 加了后台扩展
+  for (const apiVersion of [0, 6, 2.5, "2"]) assert.throws(() => pure.t3xCheckManifest({ ...ok, apiVersion }), /apiVersion/, String(apiVersion));
+  for (const apiVersion of [2, 3, 4, 5]) pure.t3xCheckManifest({ ...ok, apiVersion }, { "web.js": "" }); // 2 加了 Input / Select、openSettings、contextMenu；3 加了 dom、confirm；4 加了后台扩展；5 加了 agent、outputs
+  // agent 权限只有 apiVersion 5 起的宿主认识：旧版本声明了也拒绝，免得旧宿主装上后没有 host.agent
+  assert.throws(() => pure.t3xCheckManifest({ ...ok, apiVersion: 4, permissions: ["ui", "agent"] }, { "web.js": "" }), /apiVersion 5/);
+  pure.t3xCheckManifest({ ...ok, apiVersion: 5, permissions: ["ui", "agent"] }, { "web.js": "" });
   assert.throws(() => pure.t3xCheckManifest({ ...ok, entries: { web: "../x.js" } }), /路径/);
   assert.throws(() => pure.t3xCheckManifest({ ...ok, entries: { web: ["a.js", "a.js"] } }), /两次/);
   assert.deepEqual(pure.t3xCheckManifest({ ...ok, locales: { en: { name: "Demo", description: "d" } } }, { "web.js": "" }).web, ["web.js"]);
@@ -118,7 +121,8 @@ test("示例扩展在宿主包装里编译并激活", () => {
 });
 
 test("宿主设置页：无嵌套弹窗、对接 openSettings、appearancePatch 暴露完整 t3xUi", () => {
-  const settingsSrc = fs.readFileSync(path.join(ROOT, "host/settings.js"), "utf8");
+  const SETTINGS_FILES = ["settings.js", "settings-installed.js", "settings-browse.js"];
+  const settingsSrc = SETTINGS_FILES.map((f) => fs.readFileSync(path.join(ROOT, "host", f), "utf8")).join("\n");
   const cssSrc = fs.readFileSync(path.join(ROOT, "host/host.css"), "utf8");
   assert(!settingsSrc.includes("ExtensionSettingsDialog"), "不应保留嵌套设置弹窗组件");
   assert(!cssSrc.includes(".t3x-dialog-backdrop"), "不应保留嵌套设置弹窗样式");
@@ -134,7 +138,7 @@ test("宿主设置页：无嵌套弹窗、对接 openSettings、appearancePatch 
     assert(patched.includes(key), `appearancePatch 缺少 ${key}`);
   }
   const uiKeys = new Set(/const t3xUi=\{([^}]*)\}/.exec(patched)[1].split(",").map((s) => s.split(":")[0]));
-  const hostSrc = ["community.js", "settings.js"].map((f) => fs.readFileSync(path.join(ROOT, "host", f), "utf8")).join("\n");
+  const hostSrc = ["community.js", ...SETTINGS_FILES].map((f) => fs.readFileSync(path.join(ROOT, "host", f), "utf8")).join("\n");
   for (const [, k] of hostSrc.matchAll(/\bui\.(\w+)/g)) assert(uiKeys.has(k), `宿主用了 ui.${k}，t3xUi 里没有`);
 });
 
@@ -231,7 +235,7 @@ if (officialVersion === T3_VERSION) {
       assert(driver.length > 0 && driver.length < 20000, "Antigravity driver 的范围变了");
       for (const decl of ["const usage = yield* makeAntigravityUsageProbe({", "installation.resolve(settings.binaryPath, processEnvironment)", "auth.authMethod"]) assert(driver.includes(decl), `Antigravity driver 里没有 ${decl}`);
       // 宿主运行时绑定的 React / jsx / 档位选项函数，要是这个模块顶层真有的名字（未声明的名字到启动时才报 ReferenceError）
-      const bind = /\}\)\(\{React:([\w$]+),jsx:([\w$]+),choices:([\w$]+)\}/.exec(runtime());
+      const bind = /\}\)\(\{React:([\w$]+),jsx:([\w$]+),choices:([\w$]+),agent:\{commands:([\w$]+),useCommand:([\w$]+),useThreads:([\w$]+),useProjects:([\w$]+)\}\}/.exec(runtime());
       assert(bind, "找不到宿主运行时的 bind");
       for (const name of bind.slice(1)) {
         const n = name.replace(/\$/g, "\\$");
@@ -241,6 +245,23 @@ if (officialVersion === T3_VERSION) {
       // 名字存在还不够：档位选项函数要是 T3 档位列表组件自己调用的那个（let e=Fn(i.descriptor)）
       const effortFn = chatSrc.slice(chatSrc.indexOf("function zz(e){"));
       assert.equal(bind[3], /=([\w$]+)\(i\.descriptor\)/.exec(effortFn)?.[1], "choices 要是档位列表组件里取选项的那个函数");
+      // agent.js 用的四个名字：要从预期的模块按预期的导出名导入，而且导出的东西是我们以为的那个
+      const importsOf = new Map([...chatSrc.matchAll(/import\{([^}]*)\}from"\.\/([^"]+)"/g)].flatMap(([, names, file]) => names.split(",").map((s) => { const [exp, alias = exp] = s.split(" as "); return [alias, { exp, file }]; })));
+      const exportBody = (file, exp) => {
+        const mod = before.read(`apps/server/dist/client/assets/${file}`).toString("utf8");
+        const local = new Map([...mod.matchAll(/export\{([^}]*)\}/g)].flatMap((m) => m[1].split(",").map((s) => { const [l, e = l] = s.split(" as "); return [e, l]; }))).get(exp);
+        const at = local ? mod.search(new RegExp(`function ${local.replace(/\$/g, "\\$")}\\(`)) : -1;
+        // 只取这个函数本身：压缩后相邻函数紧挨着（比如 projectsAtom 的后面就是 visibleThreadShellsAtom 的），截固定长度会把邻居算进来
+        const end = at < 0 ? -1 : mod.indexOf("}function ", at);
+        return at < 0 ? "" : mod.slice(at, end < 0 ? at + 400 : Math.min(end + 1, at + 2000));
+      };
+      const [, , , , commands, useCommand, useThreads, useProjects] = bind;
+      assert(chatSrc.includes(`${commands}.startTurn`), "commands 要是带 startTurn 的会话命令（输入框发送用的那个）");
+      assert.match(importsOf.get(commands)?.file ?? "", /^entities-/, "commands 要从 entities 模块导入");
+      assert.match(importsOf.get(useCommand)?.file ?? "", /^composerDraftUploads-/, "useCommand 要从 composerDraftUploads 模块导入");
+      assert.match(exportBody(importsOf.get(useCommand).file, importsOf.get(useCommand).exp), /requiredScope/, "useCommand 要是带权限检查的命令 hook");
+      assert.match(exportBody(importsOf.get(useThreads).file, importsOf.get(useThreads).exp), /visibleThreadShellsAtom/, "useThreads 要读 visibleThreadShellsAtom");
+      assert.match(exportBody(importsOf.get(useProjects).file, importsOf.get(useProjects).exp), /projectsAtom/, "useProjects 要读 projectsAtom");
       const added = [...appearancePatch.apply("").matchAll(/import\{([^}]*)\}from"\.\/([^"]+)"/g)];
       for (const want of ["utils-", "skeleton-", "alert-", "empty-", "settingsLayout-"]) assert(added.some((m) => m[2].startsWith(want)), `appearancePatch 没有从 ${want}* 导入`);
       for (const [, names, file] of added) {
@@ -412,6 +433,15 @@ test("zip 解包：存储和 deflate、外壳目录、大小上限", async () =>
 });
 
 require("./server-tests.cjs")(test);
+require("./agent-tests.cjs")(test);
+
+// 某个测试的 Promise 永远不结束时事件循环会排空，进程照样以 0 退出：没跑完就算失败
+process.on("exit", (code) => {
+  if (code === 0 && passed < queue.length) {
+    console.error(`\n没跑完，卡在：${queue[passed][0]}（${passed}/${queue.length}）`);
+    process.exitCode = 1;
+  }
+});
 
 (async () => {
   for (const [name, fn] of queue) {

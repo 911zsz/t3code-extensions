@@ -1,5 +1,5 @@
 // 扩展宿主核心。构建时和 settings.js 一起包进同一个函数，追加到 T3 Code 的 ThreadRouteView 模块末尾（_chat 静态导入它）。
-// 作用域里有 bind（T3 自己的 React、jsx 运行时、推理档位选项函数）。
+// 作用域里有 bind（T3 自己的 React、jsx 运行时、推理档位选项函数，以及 agent.js 用的会话命令和列表 hook）。
 
 const { React } = bind;
 
@@ -278,7 +278,7 @@ function makeApi(rec, life) {
   };
   return {
     id,
-    manifest: rec.manifest,
+    manifest: structuredClone(rec.manifest), // 副本：宿主按 rec.manifest 授权、存盘，扩展改不到
     React,
     h: React.createElement,
     register(slot, Component) {
@@ -318,6 +318,8 @@ function makeApi(rec, life) {
     style: (css) => (life.alive ? track(addStyle(css, id)) : noop),
     onDispose: (fn) => (life.alive ? life.disposers.push(fn) : fn()),
     chat: { last: () => lastChat },
+    agent: agentApi(rec, life),
+    outputs: outputsApi(rec, life),
     lang: () => (isZh() ? "zh" : "en"),
     useLang,
     t: L,
@@ -394,7 +396,7 @@ function ChatOverlay({ state }) {
   useHostVersion();
   useLang();
   const driver = state.providers?.find?.((p) => p.instanceId === state.providerInstanceId)?.driver ?? null;
-  const full = { ...state, driver };
+  const full = Object.freeze({ ...state, driver }); // chat.last() 把它交给扩展：环境 ID 决定 agent 发到哪，不能被改
   React.useEffect(() => {
     if (!state.embedded) {
       lastChat = full;

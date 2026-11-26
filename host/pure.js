@@ -6,9 +6,11 @@ const L = (zh, en) => (isZh() ? zh : en);
 
 // 2：设置面板的 ui 加了 Input / Select 系列，host 加了 openSettings、contextMenu。3：host 加了 dom、confirm。
 // 4：entries.server，后台扩展（在 T3 后台以用户权限运行，要声明 permissions: ["server"]）。
+// 5：host.agent（用你的 agent 开会话、发消息，要声明 permissions: ["agent"]）和 host.outputs（扩展自己的输出目录）。
 // 旧 apiVersion 的扩展照常能用；用到新接口的扩展声明新值，旧宿主会拒绝安装，而不是装上后出错。
-const API_VERSION = 4;
+const API_VERSION = 5;
 const SERVER_API_VERSION = 4;
+const AGENT_API_VERSION = 5;
 const REGISTRY_VERSION = 1; // 注册表格式没变
 const TAG = "[t3x]";
 // add：所有扩展的组件都渲染；replace：最后启用的那个替换原生组件。
@@ -62,6 +64,7 @@ function t3xCheckManifest(manifest, files) {
     if (manifest.apiVersion < SERVER_API_VERSION) fail(L(`后台扩展需要 apiVersion ${SERVER_API_VERSION}`, `Background extensions need apiVersion ${SERVER_API_VERSION}`));
     if (!manifest.permissions?.includes("server")) fail(L('后台扩展要在 permissions 里声明 "server"', 'Background extensions must declare "server" in permissions'));
   }
+  if (manifest.permissions?.includes("agent") && manifest.apiVersion < AGENT_API_VERSION) fail(L(`agent 权限需要 apiVersion ${AGENT_API_VERSION}`, `The agent permission needs apiVersion ${AGENT_API_VERSION}`));
   const list = t3xEntryList(manifest);
   const all = [...list.web, ...list.styles, ...list.server, ...list.assets];
   if (list.web.length === 0 && list.server.length === 0) fail(L("entries.web 至少要有一个脚本", "entries.web must list at least one script"));
@@ -303,4 +306,4 @@ async function t3xUnzip(bytes, { maxFile = 5 << 20, maxTotal = 20 << 20, maxEntr
 }
 
 // @node-only
-if (typeof module === "object") module.exports = { t3xScopeKeys, t3xEnabledAt, t3xLocalesError, t3xEntryList, t3xCheckManifest, t3xCheckRegistry, t3xEffortModel, t3xParseGithub, t3xRawUrl, t3xUnzip, GITHUB_TOPIC, SLOTS, API_VERSION, SERVER_API_VERSION };
+if (typeof module === "object") module.exports = { t3xScopeKeys, t3xEnabledAt, t3xLocalesError, t3xEntryList, t3xCheckManifest, t3xCheckRegistry, t3xEffortModel, t3xParseGithub, t3xRawUrl, t3xUnzip, GITHUB_TOPIC, SLOTS, API_VERSION, SERVER_API_VERSION, AGENT_API_VERSION };

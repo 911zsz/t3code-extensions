@@ -2,6 +2,8 @@
 
 给 [T3 Code](https://github.com/pingdotgg/t3code) 加一个**扩展宿主**和**扩展市场**：设置导航里“外观”下面多出一个“扩展”页，可以开关、配置、从市场或链接安装扩展。
 
+![设置 → 扩展：已安装的扩展](docs/installed.png)
+
 > 非官方项目，和 T3 Code 及其团队没有关系。它把你已安装的官方 T3 Code 复制一份再打补丁，官方版本身不动。目前只支持 **macOS 上的 T3 Code (Beta)**，每个版本只认一个 T3 版本：
 >
 > | T3 Code | 用这个版本 |
@@ -17,14 +19,48 @@
 |---|---|
 | 边缘光 [`t3x-edge-glow`](https://github.com/ZiHao256/t3x-edge-glow) | 需要审批（琥珀）、等你回答（蓝）、出错（红）、后台跑完（绿）时窗口边缘亮光。动效档位：省电 / 混合 / 30fps |
 | 推理强度滑条 [`t3x-effort-slider`](https://github.com/ZiHao256/t3x-effort-slider) | 把模型面板里“推理强度”的档位列表换成竖向分档滑条（最高档在上，档名写在刻度旁边），档位越高星点越亮越快，最高档流动星云。星点动效：跟随档位 / 静态 / 关闭 |
-| 桌宠 [`t3x-desk-pets`](https://github.com/ZiHao256/t3x-desk-pets) | 输入框上沿站着当前 agent 的像素宠物，跟会话状态动，上下文越满越胖，压缩历史时挤扁、压完弹回；子代理各派一只到旁边干活、收工击掌；每只都能单独拖，拖到另一只身上会互动；窗口不在前台或切到别的会话时错过的进出场，回来补播。右键宠物有菜单（T3 样式）：换一只、打个招呼、安静模式、桌宠设置、隐藏；隐藏后右键输入框里的模型选择器叫回。每个 agent 用哪只、宠物库（增删改）在设置里 |
+| 桌宠 [`t3x-desk-pets`](https://github.com/ZiHao256/t3x-desk-pets) | 输入框上沿站着当前 agent 的像素宠物，跟会话状态动，上下文越满越胖，压缩历史时挤扁、压完弹回；子代理各派一只到旁边干活、收工击掌；每只都能单独拖，拖到另一只身上会互动；窗口不在前台或切到别的会话时错过的进出场，回来补播。右键宠物有菜单（T3 样式）：换一只、打个招呼、安静模式、桌宠设置、隐藏；隐藏后右键输入框里的模型选择器叫回。每个 agent 用哪只、宠物库（增删改）在设置里；也能选 harness、模型和会话，让 agent 照描述或参考图生成新宠物，预览每个动作、让它修改后再导入（用 `host.agent`）。内置 Codex、Clawd、Moffy 和鲸鱼娘 Dafeiyu（社区同人形象，出处和授权见扩展 README） |
 | Antigravity 官方额度 [`t3x-agy-usage`](https://github.com/ZiHao256/t3x-agy-usage) | 额度面板里的 Antigravity 额度改由官方 CLI 的 `/usage` 读取：每个实例用自己的登录，不发消息、不耗 token，T3 不再自己读 token 去调 Google 的接口。后台扩展（见下文“后台扩展”） |
+
+![“浏览”：GitHub 上带 t3code-extension 话题的社区扩展](docs/browse.png)
+
+| 桌宠 | 边缘光 |
+|---|---|
+| ![桌宠](https://github.com/ZiHao256/t3x-desk-pets/raw/main/docs/pets.gif) | ![边缘光](https://github.com/ZiHao256/t3x-edge-glow/raw/main/docs/edge-glow.png) |
+| **推理强度滑条** | **Antigravity 官方额度** |
+| ![推理强度滑条](https://github.com/ZiHao256/t3x-effort-slider/raw/main/docs/effort-slider.png) | ![Antigravity 官方额度](https://github.com/ZiHao256/t3x-agy-usage/raw/main/docs/usage-panel.png) |
 
 另有示例扩展 `examples/hello-badge`（右下角显示 agent 和会话状态），放在市场里演示安装流程，也是写扩展的模板。
 
 ## 安装
 
 需要：`/Applications/T3 Code (Beta).app` 是官方 0.1.12（其他版本看上面的对照表），Node.js 22 以上。
+
+### 让 agent 安装
+
+把下面的提示词发给 Claude Code、Codex 等 coding agent（Paste this to a coding agent）：
+
+```text
+帮我在这台 Mac 上安装 T3 Code Extensions（https://github.com/ZiHao256/t3code-extensions）。
+1. 检查前提：/Applications/T3 Code (Beta).app 存在，读出它 Contents/Info.plist 里的 CFBundleShortVersionString；node -v 是 22 以上。
+2. 按这个仓库 README 开头的对照表选版本：T3 Code 0.1.12 用 main 分支，0.1.11 用 v0.1.0 标签；其他版本停下来告诉我，不要安装。
+3. 把仓库 clone 到 ~/t3code-extensions（已存在就更新到对应版本），在里面运行 npm test，失败就停下把输出给我。
+4. 问我要“和官方版共用数据”还是“独立数据（--isolated，可以和官方版同时开）”。共用数据时先提醒我退出 T3 Code，等我确认后再运行 node install.cjs install（独立数据加 --isolated）。
+5. 运行 node install.cjs status，把输出给我，然后打开 ~/Applications/T3 Code Extensions.app。
+不要用 sudo，不要修改 /Applications 里的官方应用。
+```
+
+```text
+Install T3 Code Extensions (https://github.com/ZiHao256/t3code-extensions) on this Mac.
+1. Check the prerequisites: /Applications/T3 Code (Beta).app exists (read CFBundleShortVersionString from its Contents/Info.plist) and node -v is 22 or later.
+2. Pick the version from the table at the top of that README: T3 Code 0.1.12 uses the main branch, 0.1.11 uses the v0.1.0 tag. For any other version, stop and tell me.
+3. Clone the repository to ~/t3code-extensions (or update an existing checkout to that version) and run npm test there. If it fails, stop and show me the output.
+4. Ask me whether to share data with the official app or use separate data (--isolated, can run alongside the official app). For shared data, remind me to quit T3 Code first and wait for my confirmation, then run node install.cjs install (add --isolated for separate data).
+5. Run node install.cjs status, show me the output, then open ~/Applications/T3 Code Extensions.app.
+Do not use sudo and do not modify the official app in /Applications.
+```
+
+### 手动安装
 
 ```sh
 node install.cjs install             # 和官方版共用 ~/.t3（会话、项目、设置），两者不能同时开
@@ -81,7 +117,7 @@ my-ext/
 }
 ```
 
-`apiVersion`：带后台脚本（`entries.server`）写 `4`；用到 `host.dom` 或 `host.confirm()` 写 `3`；用到设置面板的 `Input` / `Select` 系列、`host.openSettings()` 或 `host.contextMenu()` 写 `2`；只用其余接口写 `1`。宿主会拒绝安装 apiVersion 比自己新的扩展。
+`apiVersion`：用到 `host.agent` 或 `host.outputs` 写 `5`；带后台脚本（`entries.server`）写 `4`；用到 `host.dom` 或 `host.confirm()` 写 `3`；用到设置面板的 `Input` / `Select` 系列、`host.openSettings()` 或 `host.contextMenu()` 写 `2`；只用其余接口写 `1`。宿主会拒绝安装 apiVersion 比自己新的扩展。
 
 `repository` 可选：扩展的 GitHub 仓库，卡片上的“详情”链接到这里。
 
@@ -104,6 +140,8 @@ my-ext/
 | `host.confirm(message, { variant? })` | 弹出 T3 自己的确认框，返回 `Promise<boolean>`（用 `if (await host.confirm(…))`）。`message` 里以问号结尾的那行是标题，其余行是说明；`variant: "destructive"` 时确认按钮是红色 |
 | `host.dom.composer()`、`host.dom.modelPicker(target)` | 主聊天视图的输入框外壳；`target` 在主输入框的模型选择器里时返回那个选择器（side chat 里的都不算），否则 `null`。需要找 T3 页面元素时用这里，别自己查 T3 的 DOM：T3 改版时宿主跟着改，扩展不用动 |
 | `host.chat.last()` | 最近一次聊天视图的会话状态（设置页里也能拿到 provider 列表） |
+| `host.agent` | 用你在 T3 里配置的 agent 开会话、发消息，要声明 `"permissions": ["agent"]`，见下文“让 agent 干活” |
+| `host.outputs.dir()`、`host.outputs.read(path)` | 扩展自己的输出目录 `<T3 数据目录>/t3x-out/<id>/`：`dir()` 返回绝对路径（不存在就建），`read("job/sheet.png")` 读里面的文件，不存在是 `null`，否则 `{ bytes, size, modified }`。只读普通文件，路径不能含 `..`、不跟随符号链接，单个文件最大 32 MB；读的时候文件大小变了（还在写）会抛错，稍后再读 |
 | `host.lang()`、`host.useLang()` | 当前界面语言：T3 是中文时为 `"zh"`，其他语言都是 `"en"`。`useLang` 是 React hook，切语言时触发重绘 |
 | `host.t(中文, 英文)` | 按当前界面语言二选一；在渲染时调用，组件里先调一次 `host.useLang()` |
 | `host.onDispose(fn)` | 停用时调用 |
@@ -116,6 +154,20 @@ my-ext/
 | `composer.effort` | 最后启用的替换原生档位列表 | `label`、`steps[{id,label,description,isDefault}]`、`activeIndex`、`defaultIndex`、`disabled`、`select(index)` |
 
 扩展组件出错只影响它自己：overlay 不渲染，`composer.effort` 退回原生列表，错误显示在扩展那一行。颜色请用 T3 的主题变量（`var(--foreground)`、`var(--muted-foreground)`、`var(--border)` 等），`html.dark` 是暗色模式。
+
+### 让 agent 干活
+
+声明 `"apiVersion": 5`、`"permissions": ["agent"]` 的扩展可以用 `host.agent` 让你配置好的 agent 干活，安装确认框和卡片上会标出“Agent”。发消息走 T3 输入框同一条路：会话出现在侧边栏，过程和审批都在会话里看。只针对当前会话所在的环境：
+
+| `host.agent` | 说明 |
+|---|---|
+| `providers()` | harness（T3 的 provider 实例）：`{ instanceId, driver, name, enabled, status, runtimeModes, models: [{ id, name, isDefault }] }` |
+| `useThreads()` | React hook，能看到的会话：`{ environmentId, threadId, projectId, title, instanceId, model, runtimeMode, interactionMode, running, lastError, lastRunCompletedAt, archived }` |
+| `useProjects()` | React hook，项目：`{ environmentId, projectId, title, scratch }`，`scratch` 是“无项目” |
+| `useSend()` | React hook，返回 `send(req)`：`req.target` 是 `{ threadId }`（已有会话，用它自己的 harness 和运行模式，排在正在跑的那轮后面）或 `{ newThread: { projectId, title } }`；另有 `instanceId`、`model`、`runtimeMode`（`approval-required` / `auto-accept-edits` / `auto` / `full-access`，新会话用，要在这个 harness 的 `runtimeModes` 里）、`text`、`images?: [{ name, dataUrl }]`（PNG / JPEG / WebP / GIF，最多 8 张、每张 10 MB）。返回 `Promise<{ environmentId, threadId }>`，T3 不接受、渲染后切了环境或扩展已停用时抛错 |
+| `open({ environmentId, threadId })` | 跳到这个会话 |
+
+生成文件的活：先用 `host.outputs.dir()` 拿到输出目录，在消息里让 agent 写到那里，再用 `host.outputs.read()` 读回来（可以轮询一个 agent 最后写的结果文件）。agent 在沙箱里时写这个目录可能要你在会话里批准。输出目录在运行桌面应用的这台机器上，所以要用本机环境里的 agent；远程环境的 agent 写的是远程机器上的同名路径，这里读不到。卸载扩展时输出目录一起删。
 
 ### 后台扩展
 
@@ -184,7 +236,8 @@ SHA-256 只保证下载到的就是注册表写的那份，**不代表代码安�
 ## 原理与限制
 
 - 界面补丁只开三个口子：聊天视图把会话状态交给 `chat.overlay`；推理档位列表交给 `composer.effort`；设置里加一个“扩展”页（路由表、导航分组和名字、导航图标各改一处，页面组件追加在外观设置页模块里，顶部沿用 T3 的项目/环境作用域选择）。宿主运行时追加在 T3 的 `ThreadRouteView` 模块末尾（聊天视图所在，`_chat` 静态导入它；见 `lib/patch.cjs`、`host/`）。
-- 后台扩展另有三处补丁（`lib/patch-server.cjs`）：preload 给主窗口一个只能领一次的同步入口（宿主先领走，界面扩展拿不到）；主进程校验并落盘后台脚本；T3 后台加载它们，并在创建 Antigravity 额度读取时先问有没有扩展接手。
+- `host.agent` 用的是这个模块顶层导入的 T3 会话命令（`startTurn`，输入框发送用的那个）和会话、项目列表 hook，测试会核对它们真是这些东西。
+- 后台扩展另有三处补丁（`lib/patch-server.cjs`）：preload 给主窗口一个只能领一次的入口（宿主先领走，界面扩展拿不到；同步后台脚本、读扩展输出目录都经过它）；主进程校验并落盘后台脚本；T3 后台加载它们，并在创建 Antigravity 额度读取时先问有没有扩展接手。
 - 界面语言跟着 T3：T3 的原文是英文，中文由它的翻译函数在渲染时查表。导航和搜索里的“Extensions / 扩展”靠在这个翻译函数入口补了一处；扩展页和扩展自己按 `<html lang>` 选中文或英文，其他语言显示英文。
 - 依赖 0.1.12 压缩代码里的变量名，T3 一更新就要重新适配（扩展不用改，只改这个仓库）；补丁前会核对原始文件哈希，对不上直接拒绝安装，不会装出一个坏掉的应用。
 - 本机 ad-hoc 签名，没有官方签名和公证，也没有 Hardened Runtime：官方的 entitlements 依赖官方描述文件，ad-hoc 签名带上它们反而启动不了。

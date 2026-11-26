@@ -179,7 +179,9 @@ async function reloadLocal(rec, confirm) {
   if (item.manifest.id !== rec.manifest.id) {
     throw new Error(L(`文件夹里的扩展 id 变成了“${item.manifest.id}”，没有替换“${rec.manifest.id}”`, `The folder now contains “${item.manifest.id}”, so “${rec.manifest.id}” wasn’t replaced.`));
   }
-  if (hasServer(item) && !hasServer(rec) && !(await confirm(item))) return false;
+  // 新加了后台代码或 agent 权限：和安装一样先确认
+  const gains = (has) => has(item) && !has(rec);
+  if ((gains(hasServer) || gains(hasAgent)) && !(await confirm(item))) return false;
   await install(item);
   return true;
 }
