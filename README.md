@@ -10,7 +10,8 @@
 >
 > | T3 Code | 用这个版本 |
 > |---|---|
-> | 0.1.12 | 最新的 `main` |
+> | 0.1.13 | 最新的 `main` |
+> | 0.1.12 | [v0.5.0](https://github.com/ZiHao256/t3code-extensions/releases/tag/v0.5.0)（`git clone --branch v0.5.0 …`） |
 > | 0.1.11 | [v0.1.0](https://github.com/ZiHao256/t3code-extensions/releases/tag/v0.1.0)（`git clone --branch v0.1.0 …`） |
 
 ## 扩展
@@ -22,7 +23,7 @@
 | 边缘光 [`t3x-edge-glow`](https://github.com/ZiHao256/t3x-edge-glow) | 需要审批（琥珀）、等你回答（蓝）、出错（红）、后台跑完（绿）时窗口边缘亮光。动效档位：省电 / 混合 / 30fps |
 | 推理强度滑条 [`t3x-effort-slider`](https://github.com/ZiHao256/t3x-effort-slider) | 把模型面板里“推理强度”的档位列表换成竖向分档滑条（最高档在上，档名写在刻度旁边），档位越高星点越亮越快，最高档流动星云。星点动效：跟随档位 / 静态 / 关闭 |
 | 桌宠 [`t3x-desk-pets`](https://github.com/ZiHao256/t3x-desk-pets) | 输入框上沿站着当前 agent 的宠物，跟会话状态动，上下文越满越胖，压缩历史时挤扁、压完弹回；子代理各派一只到旁边干活、收工击掌；每只都能单独拖，拖到另一只身上会互动；窗口不在前台或切到别的会话时错过的进出场，回来补播。右键宠物有菜单（T3 样式）：换一只、打个招呼、安静模式、桌宠设置、隐藏；隐藏后右键输入框里的模型选择器叫回。每个 agent 用哪只、宠物库（增删改）在设置里；也能选 harness、模型和会话，让 agent 照描述或参考图生成新宠物，预览每个动作、让它修改后再导入（用 `host.agent`）。内置 Codex、Clawd、Moffy 和鲸鱼娘 Dafeiyu（社区同人形象，出处和授权见扩展 README） |
-| Antigravity 官方额度 [`t3x-agy-usage`](https://github.com/ZiHao256/t3x-agy-usage) | 额度面板里的 Antigravity 额度改由官方 CLI 的 `/usage` 读取：每个实例用自己的登录，不发消息、不耗 token，T3 不再自己读 token 去调 Google 的接口。设置里能看每个实例的读取结果、立即重读、选面板里显示哪些额度。后台扩展（见下文“后台扩展”） |
+| Antigravity 官方额度 [`t3x-agy-usage`](https://github.com/ZiHao256/t3x-agy-usage) | 额度面板里的 Antigravity 额度由官方 CLI 的 `/usage` 读取：每个实例用自己的登录，不发消息、不耗 token，不读 token、不直接调 Google 的接口（T3 0.1.13 起自己不再读 Antigravity 额度，不装这个扩展面板里就没有这一项）。设置里能看每个实例的读取结果、立即重读、选面板里显示哪些额度。后台扩展（见下文“后台扩展”） |
 
 ![“浏览”：GitHub 上带 t3code-extension 话题的社区扩展](docs/browse.png)
 
@@ -36,7 +37,7 @@
 
 ## 安装
 
-需要：`/Applications/T3 Code (Beta).app` 是官方 0.1.12（其他版本看上面的对照表），Node.js 22 以上。
+需要：`/Applications/T3 Code (Beta).app` 是官方 0.1.13（其他版本看上面的对照表），Node.js 22 以上。
 
 ### 让 agent 安装
 
@@ -45,7 +46,7 @@
 ```text
 帮我在这台 Mac 上安装 T3 Code Extensions（https://github.com/ZiHao256/t3code-extensions）。
 1. 检查前提：/Applications/T3 Code (Beta).app 存在，读出它 Contents/Info.plist 里的 CFBundleShortVersionString；node -v 是 22 以上。
-2. 按这个仓库 README 开头的对照表选版本：T3 Code 0.1.12 用 main 分支，0.1.11 用 v0.1.0 标签；其他版本停下来告诉我，不要安装。
+2. 按这个仓库 README 开头的对照表选版本：T3 Code 0.1.13 用 main 分支，0.1.12 用 v0.5.0 标签，0.1.11 用 v0.1.0 标签；其他版本停下来告诉我，不要安装。
 3. 把仓库 clone 到 ~/t3code-extensions（已存在就更新到对应版本），在里面运行 npm test，失败就停下把输出给我。
 4. 问我要“和官方版共用数据”还是“独立数据（--isolated，可以和官方版同时开）”。共用数据时先提醒我退出 T3 Code，等我确认后再运行 node install.cjs install（独立数据加 --isolated）。
 5. 运行 node install.cjs status，把输出给我，然后打开 ~/Applications/T3 Code Extensions.app。
@@ -61,7 +62,7 @@ node install.cjs status
 node install.cjs uninstall           # 先退出应用
 ```
 
-装好的应用在 `~/Applications/T3 Code Extensions.app`。安装过程：校验官方签名 → 复制 → 打补丁（每个目标文件先核对 0.1.12 的原始哈希，补丁后用 `node --check` 检查语法）→ 更新 asar 完整性值 → 本机重新签名。自动更新会被关掉（否则会换掉打过补丁的文件）。
+装好的应用在 `~/Applications/T3 Code Extensions.app`。安装过程：校验官方签名 → 复制 → 打补丁（每个目标文件先核对 0.1.13 的原始哈希，补丁后用 `node --check` 检查语法）→ 更新 asar 完整性值 → 本机重新签名。自动更新会被关掉（否则会换掉打过补丁的文件）。
 
 **更新 T3 Code Extensions**：T3 自己的自动更新关掉了，换成本仓库的更新。启动约 10 秒后查一次最新 Release（1 次 GitHub 接口，有新版时再多 1 次），有新版就提示，到 设置 → 扩展 顶部点“更新”：
 - 在 app 里下载新版；「应用程序」里的官方版不是新版针对的 T3 版本时，还会下载那个版本的官方安装包（约 230 MB），校验官方签名后替换官方版。官方版正在运行、比它还新，或者 macOS 不让改（可能弹“已阻止修改 App”，可在 系统设置 → 隐私与安全性 → App 管理 里允许）时不替换，直接用下载的包安装；
@@ -186,7 +187,7 @@ export function activate(t3x) {
 | `log(...args)` | 写进 T3 后台日志 |
 | `lang()` | 当前界面语言，`"zh"` 或 `"en"`（同 `host.lang()`），切换后下一次调用就是新值 |
 | `handle(name, fn)` | 处理窗口里 `host.server.call(name, data)`：`fn(data)` 的返回值（可以是 Promise）就是调用结果，抛错时窗口那边收到同样的说明。返回取消函数，停用时自动撤掉 |
-| `usage.registerSource({ driver, read })` | 接手某个 provider 的额度读取，目前只支持 `antigravity`。接手后 T3 不再用自己的方式读：读取出错、或者启用的后台扩展没加载起来，面板都显示原因，不会退回 T3 自己的读取；`read(ctx)` 的结果显示在 T3 原生的额度面板里。`ctx`：`instanceId`、`profileDirectory`（T3 给这个实例的配置目录）、`authMethod`、`executablePath`（T3 解析出的 CLI 路径）、`environment`。返回 `{ windows: [{ id, label, kind: "session"/"weekly"/"monthly"/"other", usedPercent, resetsAt?, windowDurationMins? }] }`，出错就抛（消息显示在面板里），60 秒没结果算失败。同一个 provider 只能由一个扩展接手 |
+| `usage.registerSource({ driver, read })` | 接手某个 provider 的额度读取，目前只支持 `antigravity`（T3 0.1.13 自己不再读它的额度，没有扩展接手时面板里没有这一项）。`read(ctx)` 的结果显示在 T3 原生的额度面板里，窗口按额度池分组：Gemini 在上，Claude 与 GPT 在下，每组先 5 小时后每周（同一个 provider 有几个账号时 T3 会把窗口合成额度池，这里也照这个顺序排）。第一次就读取出错、或者启用的后台扩展没加载起来，面板显示原因；读成过以后再出错，面板照 T3 的规则保留上一次读到的额度。宿主给每个窗口标上它卡住哪些模型，规则照 T3 0.1.12 判断额度是否用完的那条（`exhaustedUsageWindow`）：窗口 `id` 的前缀 `gemini-` / `claude-` / `gpt-` / `3p-` 是额度池（`3p` 是 Claude 和 GPT 共用），只卡同一家族的模型，认不出的池或模型哪个满了都卡（模型的别名也算，比如默认模型的 `antigravity-default`；不在当前模型列表里的 id 不会被卡）；模型列表变了会重新标。登出、需要重新登录、T3 确认找不到 CLI（状态改成未安装，不是它暂缓上报的那一次）时清掉额度，也不再读；扩展停用时马上清掉额度，启用、升级时重读（正在读的还没回来时排在它后面，最多等到它超时），读到一半扩展被停用、换掉的结果作废。`ctx`：`instanceId`、`profileDirectory`（T3 给这个实例的配置目录）、`authMethod`、`executablePath`（T3 解析出的 CLI 路径）、`environment`。返回 `{ windows: [{ id, label, kind: "session"/"weekly"/"monthly"/"other", usedPercent, resetsAt?, windowDurationMins? }] }`，出错就抛（消息显示在面板里，规则同上），60 秒没结果算失败。宿主对每个 Antigravity 实例一次只发起一个读取（不同实例各读各的），但超时只是不再等：扩展的 `read` 停不下来，可能还在跑，下一次读取会和它同时进行，扩展要自己处理并发。同一个 provider 只能由一个扩展接手 |
 
 窗口和后台之间用 `host.server.call` ↔ `t3x.handle` 通信，扩展的设置、状态、按钮都可以自己做，不用等宿主加接口：
 
@@ -203,7 +204,7 @@ const status = await host.server.call("status");
 
 参数和结果只能是 JSON（参数最大 256 KB，结果最大 4 MB），50 秒没结果算失败。扩展 id 由宿主按调用方填，只能调到自己的后台。通道是 T3 后台在 `<T3 数据目录>/t3x-server/rpc.sock` 上开的本地 socket，目录只有你的用户能进。
 
-启用、停用、升级后台扩展时，窗口把代码交给 Electron 主进程，写到 `<T3 数据目录>/t3x-server/`，T3 后台发现变化后重新加载（不用重启）。只有本应用启动的 T3 后台会加载它们：用官方 T3 Code 打开同一份数据时，后台扩展不运行，T3 照常用自己的方式读额度。
+启用、停用、升级后台扩展时，窗口把代码交给 Electron 主进程，写到 `<T3 数据目录>/t3x-server/`，T3 后台发现变化后重新加载（不用重启）。只有本应用启动的 T3 后台会加载它们：用官方 T3 Code 打开同一份数据时，后台扩展不运行，不影响官方版。
 
 后台权限不是界面扩展的“上限”：界面扩展和宿主同在 T3 的窗口里，本来就能调用 T3 自己的接口（包括开终端、往终端里输入），一样能以你的权限运行程序。确认框里的“后台”提示是说明它会做什么，不是隔离。
 
@@ -251,9 +252,9 @@ SHA-256 只保证下载到的就是注册表写的那份，**不代表代码安�
 
 - 界面补丁只开三个口子：聊天视图把会话状态交给 `chat.overlay`；推理档位列表交给 `composer.effort`；设置里加一个“扩展”页（路由表、导航分组和名字、导航图标各改一处，页面组件追加在外观设置页模块里，顶部沿用 T3 的项目/环境作用域选择）。宿主运行时追加在 T3 的 `ThreadRouteView` 模块末尾（聊天视图所在，`_chat` 静态导入它；见 `lib/patch.cjs`、`host/`）。
 - `host.agent` 用的是这个模块顶层导入的 T3 会话命令（`startTurn`，输入框发送用的那个）和会话、项目列表 hook，测试会核对它们真是这些东西。
-- 后台扩展另有三处补丁（`lib/patch-server.cjs`）：preload 给主窗口一个只能领一次的入口（宿主先领走，界面扩展拿不到；同步后台脚本、读扩展输出目录都经过它）；主进程校验并落盘后台脚本；T3 后台加载它们，并在创建 Antigravity 额度读取时先问有没有扩展接手。
+- 后台扩展另有四处补丁（`lib/patch-server.cjs`）：preload 给主窗口一个只能领一次的入口（宿主先领走，界面扩展拿不到；同步后台脚本、读扩展输出目录都经过它）；主进程校验并落盘后台脚本；T3 后台加载它们，并在 Antigravity provider 里接回额度读取（T3 0.1.13 删掉了自己的读取，补丁照 0.1.12 的做法：只在有扩展接手时读，健康检查通过、会话开始时读，不挡这两件事，一次只读一个；登录、登出时作废正在读的结果）；最后一处改在 `runtimeLayer` 里：在 T3 所有 provider 共用的 managed provider 里加一个开关，T3 原本只让健康检查的结果改已发布的额度，Antigravity 打开这个开关后，额度和登录状态、模型列表在同一次发布里更新，不用等正在跑的健康检查；同时在 `ProviderRegistry` 合并上次保存的模型列表后再重算 Antigravity 窗口的 `modelIds`。别的 provider 不打开、也不受影响。测试用官方 app 里真的 provider、managed provider 和 `ProviderRegistry` 跑这些时序。
 - 界面语言跟着 T3：T3 的原文是英文，中文由它的翻译函数在渲染时查表。导航和搜索里的“Extensions / 扩展”靠在这个翻译函数入口补了一处；扩展页和扩展自己按 `<html lang>` 选中文或英文，其他语言显示英文。
-- 依赖 0.1.12 压缩代码里的变量名，T3 一更新就要重新适配（扩展不用改，只改这个仓库）；补丁前会核对原始文件哈希，对不上直接拒绝安装，不会装出一个坏掉的应用。
+- 依赖 0.1.13 压缩代码里的变量名，T3 一更新就要重新适配（扩展不用改，只改这个仓库）；补丁前会核对原始文件哈希，对不上直接拒绝安装，不会装出一个坏掉的应用。
 - 本机 ad-hoc 签名，没有官方签名和公证，也没有 Hardened Runtime：官方的 entitlements 依赖官方描述文件，ad-hoc 签名带上它们反而启动不了。
 - `--isolated` 副本和官方版注册的是同一个 `t3code://` 链接。两者同时开着时，T3 Connect 等网页登录的回调可能被另一个应用接走，这时先关掉另一个再登录。
 - T3 官方正在做插件系统（实验 PR，尚未合并）。合并后计划把这些扩展迁成官方插件，这个宿主就可以退役。
@@ -261,8 +262,8 @@ SHA-256 只保证下载到的就是注册表写的那份，**不代表代码安�
 ## 开发
 
 ```sh
-npm test               # 纯函数、示例扩展在宿主包装里编译激活、补丁打到官方 0.1.12、asar 读回、注册表哈希
-node tests/verify.cjs "/path/to/T3 Code (Beta).app"  # 本机官方版不是 0.1.12 时，指定一个 0.1.12 的 app 跑补丁检查
+npm test               # 纯函数、示例扩展在宿主包装里编译激活、补丁打到官方 0.1.13、asar 读回、注册表哈希
+node tests/verify.cjs "/path/to/T3 Code (Beta).app"  # 本机官方版不是 0.1.13 时，指定一个 0.1.13 的 app 跑补丁检查
 node lib/build.cjs     # 重新生成 registry/index.json
 ```
 

@@ -1,6 +1,6 @@
 /* T3X_SERVER_HOST_V1 */
 // 注入 T3 后台主模块（server-*.mjs）：从 T3X_SERVER_DIR 加载后台扩展，给它们 t3x 接口。
-// T3 读 Antigravity 额度的地方（补丁）通过 globalThis.__t3xServer 问这里有没有扩展接手。
+// Antigravity provider 里的补丁通过 globalThis.__t3xServer 问这里有没有扩展接手额度、交给它读，发布前用 routeUsage 写上每个窗口卡住哪些模型。
 // 目录由 Electron 主进程写（server-main.cjs）：index.json 列出启用的扩展，code/<id>/<sha256>.mjs 是代码，data/<id>/ 归扩展自己用。
 export function t3xCreateServerHost({ dir, log = console, importModule = (href) => import(href), rpcRetryMs = 5000 } = {}) {
   const ID_RE = /^[a-z0-9][a-z0-9.-]{1,63}$/;
@@ -22,6 +22,15 @@ export function t3xCreateServerHost({ dir, log = console, importModule = (href) 
   let started = null;
   let chain = Promise.resolve();
   let timer = null;
+  // 接手额度的来源（包括“启用了却没加载起来”）每变一次加一；Antigravity provider 的补丁等它变了就重新读
+  let sourcesVersion = 0;
+  const origin = new WeakMap(); // readUsage 的结果 -> 读到它的来源
+  const sourceWaiters = new Set();
+  function sourcesChanged() {
+    sourcesVersion += 1;
+    for (const resolve of sourceWaiters) resolve();
+    sourceWaiters.clear();
+  }
 
   const builtins = async () =>
     (node ??= {
@@ -78,8 +87,11 @@ export function t3xCreateServerHost({ dir, log = console, importModule = (href) 
           if (owner && owner.id !== id) throw new Error(`${driver} 的额度已经由 ${owner.id} 接手`);
           const entry = { id, read };
           sources.set(driver, entry);
+          sourcesChanged();
           const off = () => {
-            if (sources.get(driver) === entry) sources.delete(driver);
+            if (sources.get(driver) !== entry) return;
+            sources.delete(driver);
+            sourcesChanged();
           };
           mod.disposers.push(off);
           return off;
@@ -98,6 +110,7 @@ export function t3xCreateServerHost({ dir, log = console, importModule = (href) 
 
   async function loadOnce() {
     const { fs, path, url, crypto } = await builtins();
+    const failedBefore = failureKey(); // hasSource 也算“启用了却没加载起来”的，换了一个或者原因变了也要通知
     let index;
     try {
       const text = await fs.readFile(path.join(dir, "index.json"), "utf8");
@@ -145,6 +158,7 @@ export function t3xCreateServerHost({ dir, log = console, importModule = (href) 
         log.error(`[t3x] 后台扩展 ${id} 加载失败`, error);
       }
     }
+    if (failureKey() !== failedBefore) sourcesChanged();
     await writeStatus();
   }
 
@@ -290,40 +304,126 @@ export function t3xCreateServerHost({ dir, log = console, importModule = (href) 
 
   const unavailable = (checkedAt, message) => ({ checkedAt, windows: [], unavailable: { reason: "probeFailed", message } });
 
-  // 启用了却没加载起来的后台扩展：可能就是接手额度的那个，这时不能悄悄退回 T3 自己的读取。
+  // 额度用完时卡哪些模型：照 T3 0.1.12 的 exhaustedUsageWindow（判断模型能不能用的那个）里 Antigravity 的规则。
+  // 窗口 id 前缀 gemini- / claude- / gpt- / 3p- 是额度池（3p 是 Claude 和 GPT 共用），模型 id 前缀 gemini- / claude- / gpt- 是家族；
+  // 池或家族认不出就卡，同一家族卡，3p 卡 Claude 和 GPT。0.1.13 删了这条规则，只认窗口上的 modelIds（不写就卡住所有模型）。
+  // 面板按额度池分组显示：Gemini 在上，Claude 与 GPT（3p）在下，认不出的放最后；同一组里先 5 小时后每周
+  const AGY_POOLS = ["gemini", "3p", "claude", "gpt"];
+  const agyPoolRank = (id) => {
+    const pool = /^(gemini|claude|gpt|3p)-/.exec(id)?.[1];
+    return pool ? AGY_POOLS.indexOf(pool) : AGY_POOLS.length;
+  };
+  const byAgyPool = (a, b) => agyPoolRank(a.id) - agyPoolRank(b.id) || KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.id.localeCompare(b.id);
+
+  function agyWindowLimitsModel(windowId, slug) {
+    const pool = /^(gemini|claude|gpt|3p)-/.exec(windowId)?.[1];
+    const family = /^(gemini|claude|gpt)-/.exec(slug)?.[1];
+    return pool === undefined || family === undefined || pool === family || (pool === "3p" && (family === "claude" || family === "gpt"));
+  }
+
+  /**
+   * 新读到的额度合进已有的（provider 补丁存进 draft 前调用）：照 T3 的 resolveUsageLimitsAfterProbe，
+   * 读取失败时保留上一次成功的，较早的结果不覆盖较新的。T3 发布额度时也按这个规则，draft 和已发布的就不会对不上。
+   */
+  function mergeUsage(published, probed) {
+    if (probed?.unavailable?.reason === "probeFailed" && published && !published.unavailable) return published;
+    if (published && probed && !published.unavailable && !probed.unavailable && Date.parse(published.checkedAt) > Date.parse(probed.checkedAt)) {
+      return { ...probed, checkedAt: published.checkedAt, windows: published.windows };
+    }
+    return probed;
+  }
+
+  /**
+   * 给 provider 快照里每个额度窗口写上它卡住的模型（modelIds，按快照里的模型列表）；不用改时原样返回。
+   * 模型的别名也算（默认模型带 "antigravity-default"，新会话按它判断额度用完没有）。不在当前模型列表里的 id（比如列表里已经没有的旧模型）不会被卡。
+   */
+  function routeUsage(driver, snapshot) {
+    const windows = snapshot?.usageLimits?.windows;
+    if (driver !== "antigravity" || !Array.isArray(windows) || windows.length === 0) return snapshot;
+    // T3 的 schema 要 modelIds 是去掉首尾空白的非空字符串
+    const ids = (Array.isArray(snapshot.models) ? snapshot.models : []).flatMap((m) => [m?.slug, ...(Array.isArray(m?.aliases) ? m.aliases : [])]);
+    const models = [...new Set(ids.filter((s) => typeof s === "string" && s !== "" && s === s.trim()))];
+    // 还没有模型列表（冷启动）：池认得出的窗口写空列表，别让 Claude / GPT 的额度挡住之后才出现的 Gemini；认不出的池照 0.1.12 卡全部，不写
+    const pool = (w) => /^(gemini|claude|gpt|3p)-/.test(w.id);
+    const routed = windows.map((w) => (models.length === 0 && !pool(w) ? w : { ...w, modelIds: models.filter((id) => agyWindowLimitsModel(w.id, id)) }));
+    return { ...snapshot, usageLimits: { ...snapshot.usageLimits, windows: routed } };
+  }
+
+  // 启用了却没加载起来的后台扩展：可能就是接手额度的那个，这时面板上要说明原因，不能悄悄什么都不显示。
   // shortcut: 不知道失败的扩展原本要接手哪个 provider，就当它都接手；以后支持多个 provider 时让清单声明。
   const failed = () => Object.entries(status).find(([, s]) => s.state === "error");
+  const failureKey = () => {
+    const bad = failed();
+    return bad ? `${bad[0]}\n${bad[1].sha256}\n${bad[1].error}` : "";
+  };
 
   return {
+    routeUsage,
+    mergeUsage,
     /** 有没有启用的扩展接手这个 provider 的额度（包括启用了但加载失败的）。 */
     async hasSource(driver) {
       await start();
-      await chain; // 等正在进行的重载结束：换版本的空档里别退回 T3 自己的读取
+      await chain; // 等正在进行的重载结束：换版本的空档里别当成没有扩展接手
       return sources.has(driver) || (DRIVERS.has(driver) && failed() !== undefined);
     },
-    /** 交给扩展读额度，转成 T3 的 usageLimits；从不 reject（T3 那边按 Effect.promise 调用）。 */
-    async readUsage(driver, ctx) {
+    /**
+     * 交给扩展读额度，转成 T3 的 usageLimits；从不 reject（T3 那边按 Effect.promise 调用）。
+     * 读的时候来源换了（扩展停用、升级、被别的接手）返回 null：这次结果作废，provider 会因为 whenSourcesChange 再读一次。
+     * 超时只是不再等：扩展的 read 停不下来，可能还在跑。
+     * validNow（可选）是调用方的同步核对：调用扩展的那一刻不算数了（比如刚登出）就不调用，返回 null。
+     */
+    async readUsage(driver, ctx, validNow) {
       const checkedAt = new Date().toISOString();
       const src = sources.get(driver);
       if (!src) {
         const bad = failed();
-        return unavailable(checkedAt, bad ? `后台扩展 ${bad[0]} 没有加载起来：${bad[1].error}` : "接手额度读取的扩展已停用");
+        const result = unavailable(checkedAt, bad ? `后台扩展 ${bad[0]} 没有加载起来：${bad[1].error}` : "接手额度读取的扩展已停用");
+        origin.set(result, { failure: failureKey() }); // 加载失败的原因换了、或者有扩展登记了来源，这份就不算
+        return result;
       }
+      const stale = () => sources.get(driver) !== src || (typeof validNow === "function" && !validNow());
+      const tag = (result) => (origin.set(result, src), result); // 记下结果来自哪个来源，provider 存进去前用 resultCurrent 核对
+      const skipped = Symbol("skipped");
       let timeout;
       try {
         const result = await Promise.race([
-          Promise.resolve().then(() => src.read(Object.freeze({ ...ctx }))),
+          Promise.resolve().then(() => (stale() ? skipped : src.read(Object.freeze({ ...ctx })))),
           new Promise((_, reject) => {
             timeout = setTimeout(() => reject(new Error(`超过 ${READ_TIMEOUT_MS / 1000} 秒没有结果`)), READ_TIMEOUT_MS);
           }),
         ]);
+        if (result === skipped || stale()) return null;
         const windows = normalizeWindows(result?.windows);
-        return windows.length ? { checkedAt, windows } : unavailable(checkedAt, `${src.id}：没有返回额度`);
+        if (driver === "antigravity") windows.sort(byAgyPool);
+        return tag(windows.length ? { checkedAt, windows } : unavailable(checkedAt, `${src.id}：没有返回额度`));
       } catch (error) {
-        return unavailable(checkedAt, `${src.id}：${describe(error, 300)}`);
+        return stale() ? null : tag(unavailable(checkedAt, `${src.id}：${describe(error, 300)}`));
       } finally {
         clearTimeout(timeout);
       }
+    },
+    /** 来源的版本号；whenSourcesChange(version, signal?) 在它变了以后兑现（已经变了就马上兑现），signal 中止时撤掉等待（provider 关掉时）。 */
+    sourcesVersion: () => sourcesVersion,
+    whenSourcesChange(version, signal) {
+      if (version !== sourcesVersion || signal?.aborted) return Promise.resolve();
+      return new Promise((resolve) => {
+        const done = () => {
+          sourceWaiters.delete(done);
+          signal?.removeEventListener?.("abort", done);
+          resolve();
+        };
+        sourceWaiters.add(done);
+        signal?.addEventListener?.("abort", done, { once: true });
+      });
+    },
+    waiterCount: () => sourceWaiters.size,
+    /** 现在有没有扩展登记了来源（同步，不等重载、不算加载失败的）：来源没了就马上清掉额度。 */
+    hasRegisteredSource: (driver) => sources.has(driver),
+    /** readUsage 的结果还算不算数：读到它的那个来源还在（中途被停用、升级换掉的不算）。不是 readUsage 给的结果一律算。 */
+    resultCurrent(driver, result) {
+      const from = origin.get(result);
+      if (from === undefined) return true;
+      return "failure" in from ? !sources.has(driver) && from.failure === failureKey() : from === sources.get(driver);
     },
     reload,
     start,

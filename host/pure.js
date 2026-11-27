@@ -137,7 +137,7 @@ function t3xCheckRegistry(index) {
   return index;
 }
 
-/** 把 T3 原生的推理档位控件（档位列表组件 zz 的 props）整理成扩展用的稳定结构；没有可选档位时返回 null。 */
+/** 把 T3 原生的推理档位控件（档位列表组件 Xz 的 props）整理成扩展用的稳定结构；没有可选档位时返回 null。 */
 function t3xEffortModel({ control, traits, locked }, choicesOf) {
   const d = control?.descriptor;
   if (!d || !traits) return null;

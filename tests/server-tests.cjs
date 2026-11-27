@@ -126,7 +126,7 @@ module.exports = (test) => {
       assert.match(host.status().good.error, /SHA-256/);
       const written = JSON.parse(fs.readFileSync(path.join(dir, "status.json"), "utf8"));
       assert.equal(written.extensions.good.state, "error", "状态写给主进程读");
-      assert.equal(await host.hasSource("antigravity"), true, "启用了却没加载起来：不退回 T3 自己的读取");
+      assert.equal(await host.hasSource("antigravity"), true, "启用了却没加载起来：面板上说明原因，不当成没有扩展接手");
       assert.match((await host.readUsage("antigravity", {})).unavailable.message, /后台扩展 good 没有加载起来：.*SHA-256/);
 
       // 能解析但格式不对的索引不当成“全部停用”
@@ -153,6 +153,155 @@ module.exports = (test) => {
     }
     const none = t3xCreateServerHost({ dir: undefined, log: quiet });
     assert.equal(await none.hasSource("antigravity"), false, "没有 T3X_SERVER_DIR（官方 app 启动的后台）时什么都不加载");
+  });
+
+  test("Antigravity 的额度窗口按额度池排：Gemini 在上，Claude 与 GPT 在下，组内先 5 小时后每周", async () => {
+    const { t3xCreateServerHost } = await import(path.join(ROOT, "host", "server.mjs"));
+    const dir = tmp("t3x-order-");
+    try {
+      const w = (id, kind) => `{ id: "${id}", label: "${id}", kind: "${kind}", usedPercent: 1 }`;
+      const code = `export function activate(t3x) { return t3x.usage.registerSource({ driver: "antigravity", read: () => ({ windows: [${[w("3p-weekly", "weekly"), w("gemini-weekly", "weekly"), w("other-quota", "other"), w("3p-5h", "session"), w("gemini-5h", "session")].join(", ")}] }) }); }`;
+      serverMain.sync(dir, { installed: ["order"], extensions: [{ id: "order", version: "1.0.0", code }] });
+      const host = t3xCreateServerHost({ dir, log: quiet });
+      await host.start();
+      const { windows } = await host.readUsage("antigravity", {});
+      assert.deepEqual(windows.map((x) => x.id), ["gemini-5h", "gemini-weekly", "3p-5h", "3p-weekly", "other-quota"]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("readUsage 的结果记着来源：来源换掉后 resultCurrent 为 false", async () => {
+    const { t3xCreateServerHost } = await import(path.join(ROOT, "host", "server.mjs"));
+    const dir = tmp("t3x-origin-");
+    try {
+      const code = (n) => `export function activate(t3x) { return t3x.usage.registerSource({ driver: "antigravity", read: () => ({ windows: [{ id: "w", label: "W", kind: "weekly", usedPercent: ${n} }] }) }); }`;
+      serverMain.sync(dir, { installed: ["src"], extensions: [{ id: "src", version: "1.0.0", code: code(1) }] });
+      const host = t3xCreateServerHost({ dir, log: quiet });
+      await host.start();
+      const result = await host.readUsage("antigravity", {});
+      assert.equal(host.resultCurrent("antigravity", result), true);
+      serverMain.sync(dir, { installed: ["src"], extensions: [{ id: "src", version: "1.0.1", code: code(2) }] });
+      await host.reload();
+      assert.equal(host.resultCurrent("antigravity", result), false, "升级换掉来源后，旧来源的结果不算");
+      assert.equal(host.resultCurrent("antigravity", { windows: [] }), true, "不是 readUsage 给的一律算");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("来源变了通知 provider；读的时候来源换了，结果作废（null）", async () => {
+    const { t3xCreateServerHost } = await import(path.join(ROOT, "host", "server.mjs"));
+    const dir = tmp("t3x-src-");
+    try {
+      // read 等外面放行，用来造“读的时候停用了”
+      const slow = `export function activate(t3x) {
+        return t3x.usage.registerSource({ driver: "antigravity", read: () => new Promise((resolve) => { globalThis.t3xRelease = () => resolve({ windows: [{ id: "w", label: "W", kind: "weekly", usedPercent: 1 }] }); }) });
+      }`;
+      serverMain.sync(dir, { installed: ["slow"], extensions: [{ id: "slow", version: "1.0.0", code: slow }] });
+      const host = t3xCreateServerHost({ dir, log: quiet });
+      await host.start();
+      const v1 = host.sourcesVersion();
+      assert(v1 > 0, "登记来源算一次变化");
+      let woke = false;
+      host.whenSourcesChange(v1).then(() => (woke = true));
+      await host.reload(); // 什么都没变
+      await new Promise((r) => setTimeout(r, 10));
+      assert.equal(woke, false, "没变就不通知");
+      await host.whenSourcesChange(v1 - 1); // 已经变过了就马上兑现
+
+      // 调用扩展的那一刻调用方说不算数了：不调用扩展
+      let flipped = true;
+      const skipped = host.readUsage("antigravity", {}, () => flipped);
+      flipped = false; // readUsage 调用扩展前还隔着一个微任务，这里就是那个空档
+      assert.equal(await skipped, null, "不算数了就不调用扩展");
+      assert.equal(globalThis.t3xRelease, undefined, "扩展的 read 没被调用");
+      // provider 关掉时撤掉等待
+      const abort = new AbortController();
+      const before = host.waiterCount();
+      const waiting = host.whenSourcesChange(host.sourcesVersion(), abort.signal);
+      assert.equal(host.waiterCount(), before + 1);
+      abort.abort();
+      await waiting;
+      assert.equal(host.waiterCount(), before, "中止后撤掉等待");
+      await host.whenSourcesChange(host.sourcesVersion(), abort.signal);
+      assert.equal(host.waiterCount(), before, "已经中止的 signal 不登记等待");
+      assert.equal(host.hasRegisteredSource("antigravity"), true);
+
+      // 读的时候停用：结果作废，并通知 provider 重新读
+      const pending = host.readUsage("antigravity", {});
+      await new Promise((r) => setTimeout(r, 10));
+      serverMain.sync(dir, { installed: ["slow"], extensions: [] });
+      await host.reload();
+      assert.equal(woke, true, "停用了通知");
+      assert.equal(host.hasRegisteredSource("antigravity"), false, "停用后马上就没有登记的来源");
+      globalThis.t3xRelease();
+      assert.equal(await pending, null, "读的时候来源没了：作废");
+      assert.equal(await host.hasSource("antigravity"), false);
+
+      // 启用了却没加载起来也算变化（hasSource 认它）
+      const v2 = host.sourcesVersion();
+      const { extensions } = serverMain.sync(dir, { installed: ["slow"], extensions: [{ id: "slow", version: "1.0.1", code: slow }] });
+      fs.writeFileSync(path.join(dir, "code", "slow", `${extensions[0].sha256}.mjs`), "export function activate() {}");
+      await host.reload();
+      assert.equal(host.status().slow.state, "error");
+      assert.equal(await host.hasSource("antigravity"), true, "加载失败的也算接手（面板要显示原因）");
+      assert.equal(host.hasRegisteredSource("antigravity"), false, "但不算登记了来源");
+      // 加载失败的原因换了（同一个扩展换了版本还是失败）也要通知；旧原因的结果不算
+      const failure = await host.readUsage("antigravity", {});
+      assert.equal(host.resultCurrent("antigravity", failure), true);
+      const v3 = host.sourcesVersion();
+      const again = serverMain.sync(dir, { installed: ["slow"], extensions: [{ id: "slow", version: "1.0.2", code: `${slow}\n// 1.0.2` }] });
+      fs.writeFileSync(path.join(dir, "code", "slow", `${again.extensions[0].sha256}.mjs`), "export const nope = 1;");
+      await host.reload();
+      assert.notEqual(host.sourcesVersion(), v3, "失败的换了一个版本也通知");
+      assert.equal(host.resultCurrent("antigravity", failure), false, "旧的失败原因不算");
+      assert.notEqual(host.sourcesVersion(), v2, "加载失败也通知");
+    } finally {
+      delete globalThis.t3xRelease;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("额度窗口写上 modelIds（T3 0.1.12 exhaustedUsageWindow 里 Antigravity 的规则）、读取失败保留上一次的", async () => {
+    const { t3xCreateServerHost } = await import(path.join(ROOT, "host", "server.mjs"));
+    const { routeUsage, mergeUsage } = t3xCreateServerHost({ dir: undefined, log: quiet });
+    const models = ["gemini-3.1-pro", "gemini-3-flash", "gemini-argon-1", "claude-sonnet-4.6", "gpt-oss-120b", "fast", "ag/gemini-3.1-pro", "gemini-3.1-pro", " padded "].map((slug) => ({ slug }));
+    const win = (id) => ({ id, label: id, kind: "weekly", usedPercent: 100 });
+    const snapshot = { driver: "antigravity", models, usageLimits: { checkedAt: "2026-11-27T00:00:00.000Z", windows: [win("gemini-weekly"), win("3p-5h"), win("claude-weekly"), win("quota")] } };
+    const routed = routeUsage("antigravity", snapshot);
+    const ids = Object.fromEntries(routed.usageLimits.windows.map((w) => [w.id, w.modelIds]));
+    const unknown = ["fast", "ag/gemini-3.1-pro"]; // 认不出家族（别名、带前缀）的哪个窗口满了都卡
+    assert.deepEqual(ids["gemini-weekly"], ["gemini-3.1-pro", "gemini-3-flash", "gemini-argon-1", ...unknown], "Gemini 池卡所有 Gemini，去重，T3 schema 不收首尾有空白的 id");
+    assert.deepEqual(ids["3p-5h"], ["claude-sonnet-4.6", "gpt-oss-120b", ...unknown], "3p 是 Claude 和 GPT 共用");
+    assert.deepEqual(ids["claude-weekly"], ["claude-sonnet-4.6", ...unknown]);
+    assert.deepEqual(ids.quota, ["gemini-3.1-pro", "gemini-3-flash", "gemini-argon-1", "claude-sonnet-4.6", "gpt-oss-120b", ...unknown], "认不出的池卡全部");
+    // 0.1.13 的 exhaustedUsageWindow 只认 window.modelIds.includes(model)：用它的判断方式核对 0.1.12 的结果
+    const blocks = (model) => routed.usageLimits.windows.filter((w) => w.modelIds === undefined || w.modelIds.includes(model)).map((w) => w.id);
+    assert.deepEqual(blocks("gemini-3.1-pro"), ["gemini-weekly", "quota"], "Claude / GPT 的额度满了不挡 Gemini");
+    assert.deepEqual(blocks("gpt-oss-120b"), ["3p-5h", "quota"]);
+    assert.equal(routed.usageLimits.checkedAt, snapshot.usageLimits.checkedAt);
+    assert.equal(snapshot.usageLimits.windows[0].modelIds, undefined, "不改原来的快照");
+    // 不用改的原样返回：别的 provider、没有额度、读取失败（没有窗口）
+    for (const [driver, s] of [["codex", snapshot], ["antigravity", { models }], ["antigravity", { models, usageLimits: { windows: [], unavailable: { reason: "probeFailed" } } }]]) {
+      assert.equal(routeUsage(driver, s), s);
+    }
+    // 还没有模型列表：池认得出的写空列表（不卡），认不出的不写（卡全部）
+    const cold = routeUsage("antigravity", { ...snapshot, models: [] });
+    assert.deepEqual(cold.usageLimits.windows.map((w) => [w.id, w.modelIds]), [["gemini-weekly", []], ["3p-5h", []], ["claude-weekly", []], ["quota", undefined]]);
+    // 别名也算：默认模型带 antigravity-default（新会话按它判断额度用完没有），认不出家族，哪个窗口满了都卡
+    const aliased = routeUsage("antigravity", { ...snapshot, models: [{ slug: "gemini-1", aliases: ["antigravity-default"] }, { slug: "claude-1" }] });
+    assert.deepEqual(aliased.usageLimits.windows.map((w) => [w.id, w.modelIds]), [["gemini-weekly", ["gemini-1", "antigravity-default"]], ["3p-5h", ["antigravity-default", "claude-1"]], ["claude-weekly", ["antigravity-default", "claude-1"]], ["quota", ["gemini-1", "antigravity-default", "claude-1"]]]);
+
+    // mergeUsage 和 T3 的 resolveUsageLimitsAfterProbe 一样
+    const good = { checkedAt: "2026-11-27T01:00:00.000Z", windows: [win("gemini-weekly")] };
+    const failed = { checkedAt: "2026-11-27T02:00:00.000Z", windows: [], unavailable: { reason: "probeFailed", message: "x" } };
+    assert.equal(mergeUsage(good, failed), good, "读取失败保留上一次成功的");
+    assert.equal(mergeUsage(undefined, failed), failed, "从没读成过就显示原因");
+    assert.equal(mergeUsage(failed, good), good);
+    const older = { checkedAt: "2026-11-27T00:30:00.000Z", windows: [] };
+    assert.deepEqual(mergeUsage(good, older), { ...older, checkedAt: good.checkedAt, windows: good.windows }, "较早的结果不覆盖较新的");
+    assert.equal(mergeUsage(good, undefined), undefined, "没有扩展接手了就清掉");
   });
 
   test("调用通道（apiVersion 6）：主进程 → 后台 t3x.handle，界面语言，出错、停用和限制", async () => {

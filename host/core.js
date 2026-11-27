@@ -214,7 +214,7 @@ function compile(id, code) {
 }
 
 // 右键菜单：用 T3 自己画的那套（网页版的右键菜单，和 T3 下拉菜单同一套样式），不用 macOS 原生菜单。
-// 宿主追加在 ThreadRouteView 模块里，相对路径从 assets 目录解析；文件名带构建哈希，补丁本来就只认 0.1.12。
+// 宿主追加在 ThreadRouteView 模块里，相对路径从 assets 目录解析；文件名带构建哈希，补丁本来就只认 0.1.13。
 // items 格式同 desktopBridge.showContextMenu：{ id, label, detail, icon, checked, disabled, separatorBefore, children }，返回选中项 id 或 null。
 const CONTEXT_MENU_MODULE = "./contextMenuFallback-BiKUAfIY.js";
 let contextMenuModule = null;
@@ -237,7 +237,7 @@ const dom = {
 };
 
 // T3 自己的确认框（删除会话用的那个）：以“？”结尾的那行是标题，其余行是说明；返回 true/false。
-const CONFIRM_MODULE = "./toast-C8N5avui.js";
+const CONFIRM_MODULE = "./toast-CuwWVZD5.js";
 let confirmModule = null;
 function showConfirm(message, options) {
   confirmModule ??= import(CONFIRM_MODULE);

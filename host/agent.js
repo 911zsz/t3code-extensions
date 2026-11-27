@@ -39,7 +39,7 @@ const errorText = (e) => (typeof e === "string" ? e : typeof e?.message === "str
 const threadNeeds = (s) =>
   s.hasPendingApprovals === true || s.pendingSubagentRequest === "approval" ? "approval" : s.hasPendingUserInput === true || s.pendingSubagentRequest === "user_input" ? "input" : null;
 
-/** 当前环境里能看到的会话（hook）。运行状态在 shell 的 runtime / latestRun 里（T3 0.1.12 的 visibleThreadShellsAtom）。 */
+/** 当前环境里能看到的会话（hook）。运行状态在 shell 的 runtime / latestRun 里（T3 0.1.13 的 visibleThreadShellsAtom）。 */
 function useAgentThreads() {
   const shells = bind.agent.useThreads();
   const env = React.useSyncExternalStore(subscribeChat, currentEnvironment); // 环境是聊天视图在 effect 里报上来的，换了要重新渲染

@@ -132,8 +132,8 @@ test("宿主设置页：无嵌套弹窗、对接 openSettings、appearancePatch 
 
   const { appearancePatch } = require("../lib/patch.cjs");
   const patched = appearancePatch.apply("/* dummy */");
-  for (const key of ["Section:me", "Row:X", "Switch:re", "Button:_", "Input:d", "Select:be", "SelectTrigger:ye", "SelectValue:ge", "SelectPopup:ve", "SelectItem:he",
-    "InputGroup:wt", "InputGroupAddon:St", "InputGroupInput:Ct", "Alert:ft", "AlertDescription:dt", "AlertAction:t3xAlertAction", "toast:ct", "Badge:t3xBadge", "Skeleton:t3xSkeleton",
+  for (const key of ["Section:de", "Row:se", "Switch:W", "Button:f", "Input:p", "Select:_e", "SelectTrigger:ge", "SelectValue:pe", "SelectPopup:he", "SelectItem:fe",
+    "InputGroup:xt", "InputGroupAddon:yt", "InputGroupInput:bt", "Alert:lt", "AlertDescription:ct", "AlertAction:t3xAlertAction", "toast:at", "Badge:t3xBadge", "Skeleton:t3xSkeleton",
     "Empty:t3xEmpty", "EmptyHeader:t3xEmptyHeader", "EmptyTitle:t3xEmptyTitle", "EmptyDescription:t3xEmptyDescription", "EmptyContent:t3xEmptyContent"]) {
     assert(patched.includes(key), `appearancePatch 缺少 ${key}`);
   }
@@ -145,11 +145,11 @@ test("宿主设置页：无嵌套弹窗、对接 openSettings、appearancePatch 
 test("宿主运行时能在 ES 模块里编译", () => {
   const code = runtime();
   assert(code.startsWith(MARKER));
-  // 宿主追加在 T3 的模块末尾，依赖模块里的 Z / $ / Fn；这里给替身，只检查语法和顶层不出错。
+  // 宿主追加在 T3 的模块末尾，依赖模块里的 Z / $ / Gn；这里给替身，只检查语法和顶层不出错。
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "t3x-rt-"));
   try {
     const file = path.join(dir, "rt.mjs");
-    fs.writeFileSync(file, `const Z={Component:class{}},$={},Fn=()=>[];\n${code}\nexport {};`);
+    fs.writeFileSync(file, `const Z={Component:class{}},$={},Gn=()=>[];\n${code}\nexport {};`);
     const r = require("node:child_process").spawnSync(process.execPath, ["--check", file], { encoding: "utf8" });
     assert.equal(r.status, 0, r.stderr);
   } finally {
@@ -199,26 +199,26 @@ if (officialVersion === T3_VERSION) {
       // showConfirm 动态引入 T3 的确认框：导出名 D 是 confirm(message, { variant })，没有确认框挂载时返回 undefined
       const confirmName = /CONFIRM_MODULE = "\.\/([\w.-]+)"/.exec(fs.readFileSync(path.join(__dirname, "..", "host", "core.js"), "utf8"))[1];
       const toast = before.read(`apps/server/dist/client/assets/${confirmName}`).toString("utf8");
-      assert(/Nt as D[,}]/.test(toast) && toast.includes("function Nt(e,t){if(Ot.size!==0)return new Promise"), "确认框模块的导出变了");
+      assert(/jt as D[,}]/.test(toast) && toast.includes("function jt(e,t){if(Et.size!==0)return new Promise"), "确认框模块的导出变了");
       // t3xUi 借用外观页已导入的别名，要确认它们来自对应模块；补的 import 要在目标模块的导出里
       const { appearancePatch } = require("../lib/patch.cjs");
       const appearance = before.read(findOne(before, appearancePatch.targetRegex, appearancePatch.label)).toString("utf8");
       for (const [file, names] of [
-        ["settingsLayout-", ["i as de", "s as me", "a as X"]],
-        ["main-", ["gi as re"]],
-        ["utils-Bng1kvMW", ["Vi as _", "Di as d"]],
-        ["select-", ["t as be", "s as ye", "c as ge", "o as ve", "a as he"]],
-        ["input-group-", ["t as wt", "n as St", "r as Ct"]],
-        ["alert-", ["t as ft", "r as dt"]],
-        ["toast-", ["i as ct"]],
+        ["settingsLayout-", ["i as ce", "s as de", "a as se"]],
+        ["main-", ["bi as W"]],
+        ["utils-BRWZdN09", ["Ki as f", "Mi as p"]],
+        ["select-", ["t as _e", "s as ge", "c as pe", "o as he", "a as fe"]],
+        ["input-group-", ["t as xt", "n as yt", "r as bt"]],
+        ["alert-", ["t as lt", "r as ct"]],
+        ["toast-", ["i as at"]],
       ]) {
         // 以 - 结尾的是“名字-8 位哈希.js”，免得 alert- 撞上 alert-dialog-；否则是完整文件名
         const src = file.endsWith("-") ? `${file}[\\w-]{8}\\.js` : `${file}\\.js`;
         const imported = [...appearance.matchAll(new RegExp(`import\\{([^}]*)\\}from"\\./${src}"`, "g"))].flatMap((m) => m[1].split(","));
         for (const n of names) assert(imported.includes(n), `外观页没有从 ${file}* 导入 ${n}`);
       }
-      // showToast 用确认框模块的导出 i：要和外观页当 toast 管理器（ct）导入的是同一个文件
-      assert(new RegExp(`import\\{[^}]*\\bi as ct\\b[^}]*\\}from"\\./${confirmName}"`).test(appearance), "toast 管理器不是确认框模块的导出 i");
+      // showToast 用确认框模块的导出 i：要和外观页当 toast 管理器（at）导入的是同一个文件
+      assert(new RegExp(`import\\{[^}]*\\bi as at\\b[^}]*\\}from"\\./${confirmName}"`).test(appearance), "toast 管理器不是确认框模块的导出 i");
       // 聊天补丁：working / awaiting 和 T3 传给原生时间线的是同一个东西（变量名写错时语法照样通过，扩展会拿到别的值）
       const { chatPatch } = require("../lib/patch.cjs");
       const chatSrc = before.read(findOne(before, chatPatch.targetRegex, chatPatch.label)).toString("utf8");
@@ -228,14 +228,36 @@ if (officialVersion === T3_VERSION) {
       assert.equal(field("awaiting"), /awaitingUser:(.*?),awaitingRequestId:/.exec(chatSrc)?.[1], "awaiting 要照抄原生时间线的 awaitingUser");
       assert.equal(field("compacting"), /isCompacting:([\w$]+),awaitingUser:/.exec(chatSrc)?.[1], "compacting 要是原生时间线的 isCompacting");
       assert.equal(field("context"), /sources:[^,]+,contextWindow:([\w$]+)\}\}\)/.exec(chatSrc)?.[1], "context 要是输入框 Context 一栏用的 contextWindow");
-      // 后台补丁包住 Antigravity 的 usage.probe：用到的 Effect 函数要是这个模块按这些名字导入的，局部变量要在 driver 里先声明
-      const { serverPatch } = require("../lib/patch-server.cjs");
+      // 后台补丁接回 Antigravity 额度：插进去的代码用到的 Effect / SubscriptionRef 函数要是这个模块按这些名字导入的，
+      // 局部变量要在 driver / provider 里先声明（未声明的名字语法照样通过，到 T3 后台启动或读额度时才报 ReferenceError）
+      const { serverPatch, AGY_MARKER } = require("../lib/patch-server.cjs");
       const serverSrc = before.read(findOne(before, serverPatch.targetRegex, serverPatch.label)).toString("utf8");
-      const effectNames = [...serverSrc.matchAll(/import \{([^}]*)\} from "\.\/Schema-[\w-]+\.mjs"/g)].flatMap((m) => m[1].split(",").map((x) => x.trim().split(" as ").pop()));
-      for (const n of ["gen", "promise", "option"]) assert(effectNames.includes(n), `T3 后台模块没有从 Effect 导入 ${n}`);
+      const serverImports = new Map([...serverSrc.matchAll(/import \{([^}]*)\} from "\.\/([\w.-]+)"/g)].flatMap(([, names, file]) => names.split(",").map((x) => { const [exp, alias = exp] = x.trim().split(" as "); return [alias.trim(), file]; })));
+      for (const n of ["gen", "promise", "option", "map$2", "scope", "suspend", "void_", "flatMap", "andThen", "ensuring", "ignoreCause", "forkIn", "none", "some"]) {
+        assert.match(serverImports.get(n) ?? "", /^Schema-[\w-]+\.mjs$/, `T3 后台模块没有从 Effect 导入 ${n}`);
+      }
+      const provider = serverSrc.slice(serverSrc.indexOf('const makeAntigravityProvider = fn("makeAntigravityProvider")'), serverSrc.indexOf("// src/provider/Drivers/AntigravityDriver.ts"));
+      assert(provider.length > 0 && provider.length < 20000, "Antigravity provider 的范围变了");
+      // get$6 / updateSome 要是 provider 自己拿来读、改 metadata（SubscriptionRef）的那两个
+      for (const decl of ["const metadata = yield* ", "updateSome(metadata, ", "const managed = yield* makeManagedServerProvider({", "const initialized = ", "const missingInstallation = ", "const before = yield* get$6(metadata);", "draft: {\n\t\t\t\t\t...draft,\n\t\t\t\t\tinstalled: !missingInstallation,"]) {
+        assert(provider.includes(decl), `Antigravity provider 里没有 ${decl}`);
+      }
+      // managedPatch 要打在这个 provider 用的那份 managed provider 上（runtimeLayer 有两份）；它的 enrichment 发布函数里 input 就是 makeManagedServerProvider 的参数
+      const { managedPatch } = require("../lib/patch-server.cjs");
+      assert.match(`apps/server/dist/${serverImports.get("makeManagedServerProvider")}`, managedPatch.targetRegex, "managedPatch 没有打在 Antigravity 用的 managed provider 上");
+      const managedSrc = before.read(findOne(before, managedPatch.targetRegex, managedPatch.label)).toString("utf8");
+      const managedFn = managedSrc.slice(managedSrc.indexOf('const makeManagedServerProvider = fn("makeManagedServerProvider")(function* (input) {'));
+      assert(managedFn.indexOf("const publishEnrichedSnapshot = ") > 0 && managedFn.indexOf("const publishEnrichedSnapshot = ") < 2000, "managed provider 的 enrichment 发布不在 makeManagedServerProvider 里了");
       const driver = serverSrc.slice(serverSrc.indexOf("const installation = yield* AntigravityInstallation;"), serverSrc.indexOf("const provider = yield* makeAntigravityProvider(settings, {"));
       assert(driver.length > 0 && driver.length < 20000, "Antigravity driver 的范围变了");
-      for (const decl of ["const usage = yield* makeAntigravityUsageProbe({", "installation.resolve(settings.binaryPath, processEnvironment)", "auth.authMethod"]) assert(driver.includes(decl), `Antigravity driver 里没有 ${decl}`);
+      assert(serverSrc.includes('create: fn("AntigravityDriver.create")(function* ({ instanceId, '), "Antigravity driver 的参数里没有 instanceId");
+      for (const decl of ["installation.resolve(settings.binaryPath, processEnvironment)", "auth.authMethod", "const processEnvironment = ", "const profileDirectory = ", "const classifyModels = (draft) => currentCatalog.pipe(map$2(", "const publishCatalog = fn("]) {
+        assert(driver.includes(decl), `Antigravity driver 里没有 ${decl}`);
+      }
+      // 没有 T3 自己的读取可以退回：0.1.13 里没有，补丁也不能引入
+      const patchedServer = serverPatch.apply(serverSrc);
+      assert(patchedServer.includes(AGY_MARKER) && patchedServer.includes("t3xProbeUsage: t3xUsageProbe,"), "额度补丁没有打上");
+      for (const old of ["makeAntigravityUsageProbe", "usage.probe", "cloudcode-pa.googleapis.com/v1internal", "retrieveUserQuota"]) assert(!patchedServer.includes(old), `T3 后台模块里不该有 ${old}`);
       // 宿主运行时绑定的 React / jsx / 档位选项函数，要是这个模块顶层真有的名字（未声明的名字到启动时才报 ReferenceError）
       const bind = /\}\)\(\{React:([\w$]+),jsx:([\w$]+),choices:([\w$]+),agent:\{commands:([\w$]+),useCommand:([\w$]+),useThreads:([\w$]+),useProjects:([\w$]+)\},version:"[\d.]+"\}/.exec(runtime());
       assert(bind, "找不到宿主运行时的 bind");
@@ -244,18 +266,18 @@ if (officialVersion === T3_VERSION) {
         const declared = new RegExp(`import\\{[^}]*(?:\\bas |[{,])${n}[,}]`).test(chatSrc) || new RegExp(`(?:^|[;}\\n])var (?:[^;]*?,)?${n}=`).test(chatSrc);
         assert(declared, `宿主绑定的 ${name} 不是 ${chatPatch.label}顶层的名字`);
       }
-      // 名字存在还不够：档位选项函数要是 T3 档位列表组件自己调用的那个（let e=Fn(i.descriptor)）
-      const effortFn = chatSrc.slice(chatSrc.indexOf("function zz(e){"));
+      // 名字存在还不够：档位选项函数要是 T3 档位列表组件自己调用的那个（let e=Gn(i.descriptor)）
+      const effortFn = chatSrc.slice(chatSrc.indexOf("function Xz(e){"));
       assert.equal(bind[3], /=([\w$]+)\(i\.descriptor\)/.exec(effortFn)?.[1], "choices 要是档位列表组件里取选项的那个函数");
       // agent.js 用的四个名字：要从预期的模块按预期的导出名导入，而且导出的东西是我们以为的那个
       const importsOf = new Map([...chatSrc.matchAll(/import\{([^}]*)\}from"\.\/([^"]+)"/g)].flatMap(([, names, file]) => names.split(",").map((s) => { const [exp, alias = exp] = s.split(" as "); return [alias, { exp, file }]; })));
-      const exportBody = (file, exp) => {
+      const exportBody = (file, exp, max = 2000) => {
         const mod = before.read(`apps/server/dist/client/assets/${file}`).toString("utf8");
         const local = new Map([...mod.matchAll(/export\{([^}]*)\}/g)].flatMap((m) => m[1].split(",").map((s) => { const [l, e = l] = s.split(" as "); return [e, l]; }))).get(exp);
         const at = local ? mod.search(new RegExp(`function ${local.replace(/\$/g, "\\$")}\\(`)) : -1;
         // 只取这个函数本身：压缩后相邻函数紧挨着（比如 projectsAtom 的后面就是 visibleThreadShellsAtom 的），截固定长度会把邻居算进来
         const end = at < 0 ? -1 : mod.indexOf("}function ", at);
-        return at < 0 ? "" : mod.slice(at, end < 0 ? at + 400 : Math.min(end + 1, at + 2000));
+        return at < 0 ? "" : mod.slice(at, end < 0 ? at + 400 : Math.min(end + 1, at + max));
       };
       const [, , , , commands, useCommand, useThreads, useProjects] = bind;
       assert(chatSrc.includes(`${commands}.startTurn`), "commands 要是带 startTurn 的会话命令（输入框发送用的那个）");
@@ -281,6 +303,76 @@ if (officialVersion === T3_VERSION) {
           assert.equal(fn, localOf.get(exp), `${file} 的 ${exp} 不是 data-slot=${want} 的组件`);
         }
       }
+      // 作用域 hook 没有 data-slot：要是“Settings scope must be read inside SettingsScopeProvider”那个函数读的同一个（0.1.13 里导出名从 b 换成了 x，b 还在但成了别的组件）
+      const [, scopeExp, scopeFile] = /import\{([\w$]+) as t3xUseScope\}from"\.\/([^"]+)"/.exec(appearancePatch.apply(""));
+      const layoutSrc = before.read(`apps/server/dist/client/assets/${scopeFile}`).toString("utf8");
+      const scopeReader = /let e=([\w$]+)\(\);if\(e===null\)throw Error\(`Settings scope must be read inside SettingsScopeProvider\.`\)/.exec(layoutSrc)?.[1];
+      assert(scopeReader && exportBody(scopeFile, scopeExp).startsWith(`function ${scopeReader}(){return(0,`) && exportBody(scopeFile, scopeExp).includes(".useContext)("), `${scopeFile} 的 ${scopeExp} 不是设置作用域 hook`);
+      // t3xUi 借来的别名也按组件本身认（同上：导出名可能还在、意思变了）。外观页从哪个文件导入的，就核对那个文件的导出。
+      const appended = appearancePatch.apply("");
+      const ui = Object.fromEntries(/const t3xUi=\{([^}]*)\}/.exec(appended)[1].split(",").map((s) => s.split(":")));
+      ui.Page = /return\(0,\$\.jsx\)\(([\w$]+),\{children:\(0,\$\.jsx\)\(globalThis\.t3xHost/.exec(appended)[1];
+      const appearanceImports = new Map([...appearance.matchAll(/import\{([^}]*)\}from"\.\/([^"]+)"/g)].flatMap(([, names, file]) => names.split(",").map((s) => { const [exp, alias = exp] = s.split(" as "); return [alias, { exp, file }]; })));
+      const slot = (s) => (body) => body.includes(`"data-slot":\`${s}\``);
+      for (const [key, is] of Object.entries({
+        Page: (b) => b.includes("searchTargetFallbacks"),
+        Section: (b) => b.includes("hideTitle:"),
+        Row: (b) => b.includes("resetAction:"),
+        Switch: slot("switch"),
+        Button: slot("button"),
+        Input: slot("input"),
+        SelectTrigger: slot("select-trigger"),
+        SelectValue: slot("select-value"),
+        SelectPopup: slot("select-popup"),
+        SelectItem: slot("select-item"),
+        InputGroup: slot("input-group"),
+        InputGroupAddon: slot("input-group-addon"),
+        Alert: slot("alert"),
+        AlertDescription: slot("alert-description"),
+      })) {
+        const imp = appearanceImports.get(ui[key]);
+        assert(imp && is(exportBody(imp.file, imp.exp, 8000)), `外观页的 ${ui[key]}（${imp?.file} 的 ${imp?.exp}）不是 ${key}`);
+      }
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // 额度面板：几个账号合成的额度池行，Antigravity 先按池（Gemini 在上）再按 5 小时 / 每周，别的 provider 照旧只按 5 小时 / 每周
+  test("额度面板排序：Antigravity 的 Gemini 在上，Claude 与 GPT 在下", () => {
+    const { usageOrderPatch: p } = require("../lib/patch.cjs");
+    const asar = readAsar(asarFile);
+    const src = asar.read(findOne(asar, p.targetRegex, p.label)).toString("utf8");
+    assert(src.includes("var __={session:0,weekly:1,monthly:2,other:3};"), "T3 的额度窗口顺序表变了");
+    const out = p.apply(src);
+    const t3xAgyPool = new Function(`${out.slice(out.lastIndexOf("function t3xAgyPool"))}\nreturn t3xAgyPool;`)();
+    const order = { session: 0, weekly: 1, monthly: 2, other: 3 };
+    const sortRows = (rows) => rows.sort((e, t) => t3xAgyPool(e) - t3xAgyPool(t) || order[e.kind] - order[t.kind]).map((r) => r.id);
+    const row = (id, kind, driver = "antigravity") => ({ id, kind, members: [{ account: { driver } }] });
+    assert.deepEqual(sortRows([row("gemini-5h", "session"), row("3p-5h", "session"), row("other-quota", "other"), row("gemini-weekly", "weekly"), row("3p-weekly", "weekly")]), ["gemini-5h", "gemini-weekly", "3p-5h", "3p-weekly", "other-quota"]);
+    assert.deepEqual(sortRows([row("secondary", "weekly", "codex"), row("primary", "session", "codex")]), ["primary", "secondary"], "别的 provider 照旧");
+  });
+
+  // 锚点和名字对了还不够：时序（读取、发布、登录登出、模型列表变化、registry 合并）要用 T3 真的 provider、managed provider 和 ProviderRegistry 跑一遍。
+  // 把官方 app 的后台模块解到临时目录，打上补丁、末尾导出测试要用的名字，在子进程里跑 tests/agy-provider.mjs。
+  test("Antigravity 额度接回 provider：读取、发布、模型列表变化、读取失败、登录登出（用官方 app 里真的 provider 跑）", () => {
+    const { serverPatch, managedPatch } = require("../lib/patch-server.cjs");
+    const asar = readAsar(asarFile);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "t3x-agy-"));
+    try {
+      for (const key of asar.files.keys()) if (/^apps\/server\/dist\/[^/]+\.mjs$/.test(key)) fs.writeFileSync(path.join(dir, path.basename(key)), asar.read(key));
+      const managedFile = path.join(dir, path.basename(findOne(asar, managedPatch.targetRegex, managedPatch.label)));
+      const registryHooks = "export const t3xRegistryTest = { ProviderRegistry, layer: layer$56, build, provide: provide$1, unbounded: unbounded$1, publish, subscribe, fromPubSub, ProviderInstanceRegistry, ProviderInstanceRegistryMutator, ModelManifest, ProviderLatestVersions, ServerConfig, FileSystem, Path, Environment, ChildProcessSpawner };";
+      fs.writeFileSync(managedFile, `${managedPatch.apply(fs.readFileSync(managedFile, "utf8"))}\n${registryHooks}\n`);
+      const serverFile = path.join(dir, path.basename(findOne(asar, serverPatch.targetRegex, serverPatch.label)));
+      const hooks = "export const t3xTest = { makeAntigravityProvider, makeManagedServerProvider, ProviderHost, gen, sync, promise, succeed, suspend, fail: fail$2, sleep, scoped, provideService, forkIn, runForEach, scope, empty: empty$5 };";
+      fs.writeFileSync(serverFile, `${serverPatch.apply(fs.readFileSync(serverFile, "utf8"))}\n${hooks}\n`);
+      const schemaFile = path.join(dir, fs.readdirSync(dir).find((f) => /^Schema-[\w-]+\.mjs$/.test(f)));
+      const env = { ...process.env };
+      delete env.T3X_SERVER_DIR;
+      const r = require("node:child_process").spawnSync(process.execPath, ["--no-warnings", path.join(__dirname, "agy-provider.mjs"), serverFile, schemaFile, managedFile], { encoding: "utf8", env, timeout: 120_000 });
+      assert.equal(r.status, 0, `${r.stdout}\n${r.stderr}`);
+      assert.match(r.stdout, /^ok$/m);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
